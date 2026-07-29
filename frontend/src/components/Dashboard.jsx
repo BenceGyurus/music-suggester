@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { X, Download, RefreshCw, Check, AlertTriangle } from 'lucide-react';
 
-const API_BASE = 'http://localhost:3001/api';
+const API_BASE = '/api';
 
 function Dashboard() {
   const [recommendations, setRecommendations] = useState([]);
