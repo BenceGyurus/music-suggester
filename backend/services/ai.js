@@ -90,6 +90,43 @@ async function getTrackInfo(artist, title) {
 }
 
 /**
+ * Discover similar but smaller artists based on a known artist.
+ */
+async function discoverSimilarArtists(artistName) {
+  try {
+    // 1. Find the artist ID on Deezer
+    const searchUrl = `https://api.deezer.com/search/artist?q=${encodeURIComponent(artistName)}&limit=1`;
+    const searchRes = await axios.get(searchUrl, { timeout: 10000 });
+    const artists = searchRes.data.data || [];
+    if (artists.length === 0) {
+      return { error: "Artist not found in Deezer." };
+    }
+    const artistId = artists[0].id;
+
+    // 2. Fetch related artists
+    const relatedUrl = `https://api.deezer.com/artist/${artistId}/related?limit=20`;
+    const relatedRes = await axios.get(relatedUrl, { timeout: 10000 });
+    const related = relatedRes.data.data || [];
+
+    // 3. Filter for "smaller" artists (e.g. less than 500k fans)
+    const MAX_FANS = 500000;
+    const underground = related.filter(a => a.nb_fan < MAX_FANS);
+
+    if (underground.length === 0) {
+        // If all related are huge, just take the bottom half sorted by fans
+        related.sort((a, b) => a.nb_fan - b.nb_fan);
+        const smallest = related.slice(0, 5);
+        return smallest.map(a => ({ artist: a.name, fans: a.nb_fan }));
+    }
+
+    return underground.map(a => ({ artist: a.name, fans: a.nb_fan })).slice(0, 10);
+  } catch (error) {
+    console.error('Discover Similar Artists Error:', error.message);
+    return { error: "Failed to discover similar artists" };
+  }
+}
+
+/**
  * Generate AI music recommendations via OpenRouter.
  */
 async function generateRecommendations(count = 5) {
@@ -109,7 +146,7 @@ async function generateRecommendations(count = 5) {
   const dislikeStr = dislikes.map(d => `${d.artist}-${d.name}`).join(';');
   const pastStr = pastRecommendations.map(p => `${p.artist}-${p.title}`).join(';');
 
-  const systemPrompt = `You are a music recommender. You MUST return ONLY a JSON array of ${count} track objects with "title", "artist", and "album" keys. CRITICAL: Do NOT output any markdown, explanations, or conversational text. Output ONLY the raw JSON array. You have access to tools to search real music databases. USE THEM to find real tracks before suggesting them if you are unsure about exact titles, OR use the get_trending_music tool to see what is currently popular and new! If you are not intimately familiar with the tracks in the user's history, USE the get_track_info tool to look up their genres and release years so you can search for similar music!`;
+  const systemPrompt = `You are a music recommender. You MUST return ONLY a JSON array of ${count} track objects with "title", "artist", and "album" keys. CRITICAL: Do NOT output any markdown, explanations, or conversational text. Output ONLY the raw JSON array. You have access to tools to search real music databases. USE THEM to find real tracks before suggesting them if you are unsure about exact titles, OR use the get_trending_music tool to see what is currently popular and new! If you are not intimately familiar with the tracks in the user's history, USE the get_track_info tool to look up their genres and release years so you can search for similar music! If the user wants to discover new, smaller underground artists based on their library, USE the discover_similar_artists tool!`;
   let userPrompt = "";
   if (recentListens.length > 0) {
     userPrompt = `
@@ -198,6 +235,20 @@ Mix in some brand new/trending tracks if they fit the user's taste!
           required: ['artist', 'title']
         }
       }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'discover_similar_artists',
+        description: 'Discover underground or smaller artists that are musically similar to a given artist. Useful for finding hidden gems based on the user\'s library.',
+        parameters: {
+          type: 'object',
+          properties: {
+            artist: { type: 'string', description: 'The name of the artist you want to find similar artists for.' }
+          },
+          required: ['artist']
+        }
+      }
     }
   ];
 
@@ -262,6 +313,12 @@ Mix in some brand new/trending tracks if they fit the user's taste!
             console.log(`AI called get_track_info with artist: ${artist}, title: ${title}`);
             const infoResults = await getTrackInfo(artist, title);
             messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(infoResults) });
+          } else if (toolCall.function.name === 'discover_similar_artists') {
+            const args = JSON.parse(toolCall.function.arguments || '{}');
+            const artist = args.artist || '';
+            console.log(`AI called discover_similar_artists with artist: ${artist}`);
+            const similarArtists = await discoverSimilarArtists(artist);
+            messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(similarArtists) });
           }
         }
         // Continue loop to send tool results back to AI

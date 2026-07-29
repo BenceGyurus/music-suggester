@@ -330,4 +330,62 @@ describe('AI Service', () => {
     expect(recs[0].title).toBe('Similar Track');
     expect(axios.get).toHaveBeenCalledWith('https://itunes.apple.com/search?term=Daft%20Punk%20Get%20Lucky&entity=song&limit=1', expect.any(Object));
   });
+
+  it('should handle tool calls for discover_similar_artists', async () => {
+    getSetting.mockImplementation((key) => {
+      if (key === 'openrouter_key') return 'test_key';
+      if (key === 'ai_model') return 'test_model';
+      return null;
+    });
+
+    getAllRecentListens.mockResolvedValue([]);
+    dbAll.mockResolvedValue([]);
+
+    const toolCallMessage = {
+      tool_calls: [
+        {
+          id: 'call_discover_1',
+          function: {
+            name: 'discover_similar_artists',
+            arguments: JSON.stringify({ artist: 'Daft Punk' })
+          }
+        }
+      ]
+    };
+
+    const mockAiResponse = [
+      { title: 'Underground Track', artist: 'Underground Artist', album: 'Album' }
+    ];
+
+    const finalMessage = {
+      content: JSON.stringify(mockAiResponse)
+    };
+
+    axios.post
+      .mockResolvedValueOnce({ data: { choices: [{ message: toolCallMessage }] } })
+      .mockResolvedValueOnce({ data: { choices: [{ message: finalMessage }] } });
+
+    // Mock Deezer search artist
+    axios.get.mockResolvedValueOnce({
+      data: { data: [{ id: 27, name: 'Daft Punk' }] }
+    });
+
+    // Mock Deezer related artists
+    axios.get.mockResolvedValueOnce({
+      data: {
+        data: [
+          { name: 'Underground Artist', nb_fan: 1000 },
+          { name: 'Mainstream Artist', nb_fan: 1000000 }
+        ]
+      }
+    });
+
+    const recs = await generateRecommendations(1);
+    expect(recs.length).toBe(1);
+    expect(recs[0].title).toBe('Underground Track');
+    // First get is search artist
+    expect(axios.get).toHaveBeenCalledWith('https://api.deezer.com/search/artist?q=Daft%20Punk&limit=1', expect.any(Object));
+    // Second get is related artists
+    expect(axios.get).toHaveBeenCalledWith('https://api.deezer.com/artist/27/related?limit=20', expect.any(Object));
+  });
 });

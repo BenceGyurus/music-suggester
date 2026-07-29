@@ -91,6 +91,35 @@ async function getRecentlyPlayedForAccount(account) {
 }
 
 /**
+ * Fetch most played (frequent) albums for a Navidrome account
+ */
+async function getFrequentAlbumsForAccount(account) {
+  try {
+    let params = { u: account.username, v: '1.16.1', c: 'AutoMusicSuggester', f: 'json', type: 'frequent', size: 20 };
+    if (account.salt) {
+      params.t = generateSubsonicToken(account.password_or_token, account.salt);
+      params.s = account.salt;
+    } else {
+      params.p = account.password_or_token;
+    }
+
+    let baseUrl = account.url;
+    if (!baseUrl.endsWith('/')) baseUrl += '/';
+
+    const response = await axios.get(`${baseUrl}rest/getAlbumList2`, { params, timeout: 10000 });
+    const data = response.data['subsonic-response'];
+    if (data.status === 'ok') {
+      const albums = data.albumList2?.album || [];
+      return albums.map(a => ({ artist: a.artist, album: a.name, title: `Top Album: ${a.name}` }));
+    }
+    return [];
+  } catch (error) {
+    console.error(`Failed to fetch frequent albums from Navidrome ${account.url}:`, error.message);
+    return [];
+  }
+}
+
+/**
  * Fetch recently played tracks across all configured Navidrome accounts
  */
 async function getAllRecentListens() {
@@ -103,7 +132,9 @@ async function getAllRecentListens() {
   } else {
     for (const account of accounts) {
       const listens = await getRecentlyPlayedForAccount(account);
+      const frequents = await getFrequentAlbumsForAccount(account);
       allListens.push(...listens);
+      allListens.push(...frequents);
     }
     // If API requests failed or yielded 0 tracks, try falling back to files
     if (allListens.length === 0) {
