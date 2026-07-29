@@ -282,4 +282,52 @@ describe('AI Service', () => {
     expect(recs[0].title).toBe('Hungarian Hit');
     expect(axios.get).toHaveBeenCalledWith('https://itunes.apple.com/hu/rss/topsongs/limit=3/json', expect.any(Object));
   });
+
+  it('should handle tool calls for get_track_info', async () => {
+    getSetting.mockImplementation((key) => {
+      if (key === 'openrouter_key') return 'test_key';
+      if (key === 'ai_model') return 'test_model';
+      return null;
+    });
+
+    getAllRecentListens.mockResolvedValue([]);
+    dbAll.mockResolvedValue([]);
+
+    const toolCallMessage = {
+      tool_calls: [
+        {
+          id: 'call_info_1',
+          function: {
+            name: 'get_track_info',
+            arguments: JSON.stringify({ artist: 'Daft Punk', title: 'Get Lucky' })
+          }
+        }
+      ]
+    };
+
+    const mockAiResponse = [
+      { title: 'Similar Track', artist: 'Similar Artist', album: 'Album' }
+    ];
+
+    const finalMessage = {
+      content: JSON.stringify(mockAiResponse)
+    };
+
+    axios.post
+      .mockResolvedValueOnce({ data: { choices: [{ message: toolCallMessage }] } })
+      .mockResolvedValueOnce({ data: { choices: [{ message: finalMessage }] } });
+
+    axios.get.mockResolvedValueOnce({
+      data: {
+        results: [
+          { artistName: 'Daft Punk', trackName: 'Get Lucky', collectionName: 'RAM', primaryGenreName: 'Electronic', releaseDate: '2013-04-19' }
+        ]
+      }
+    });
+
+    const recs = await generateRecommendations(1);
+    expect(recs.length).toBe(1);
+    expect(recs[0].title).toBe('Similar Track');
+    expect(axios.get).toHaveBeenCalledWith('https://itunes.apple.com/search?term=Daft%20Punk%20Get%20Lucky&entity=song&limit=1', expect.any(Object));
+  });
 });

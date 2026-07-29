@@ -63,6 +63,33 @@ async function getTrendingMusic(genreId = 0, limit = 15, country = null) {
 }
 
 /**
+ * Fetch detailed metadata about a specific track.
+ */
+async function getTrackInfo(artist, title) {
+  try {
+    const term = `${artist} ${title}`;
+    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=song&limit=1`;
+    const response = await axios.get(url, { timeout: 10000 });
+    const results = response.data.results || [];
+    if (results.length > 0) {
+      const r = results[0];
+      return {
+        artist: r.artistName,
+        title: r.trackName,
+        album: r.collectionName,
+        genre: r.primaryGenreName,
+        release_date: r.releaseDate ? r.releaseDate.substring(0, 10) : 'Unknown',
+        duration_ms: r.trackTimeMillis
+      };
+    }
+    return { error: "Track not found" };
+  } catch (error) {
+    console.error('Get Track Info Error:', error.message);
+    return { error: "Failed to fetch track info" };
+  }
+}
+
+/**
  * Generate AI music recommendations via OpenRouter.
  */
 async function generateRecommendations(count = 5) {
@@ -82,7 +109,7 @@ async function generateRecommendations(count = 5) {
   const dislikeStr = dislikes.map(d => `${d.artist}-${d.name}`).join(';');
   const pastStr = pastRecommendations.map(p => `${p.artist}-${p.title}`).join(';');
 
-  const systemPrompt = `You are a music recommender. You MUST return ONLY a JSON array of ${count} track objects with "title", "artist", and "album" keys. CRITICAL: Do NOT output any markdown, explanations, or conversational text. Output ONLY the raw JSON array. You have access to tools to search real music databases. USE THEM to find real tracks before suggesting them if you are unsure about exact titles, OR use the get_trending_music tool to see what is currently popular and new!`;
+  const systemPrompt = `You are a music recommender. You MUST return ONLY a JSON array of ${count} track objects with "title", "artist", and "album" keys. CRITICAL: Do NOT output any markdown, explanations, or conversational text. Output ONLY the raw JSON array. You have access to tools to search real music databases. USE THEM to find real tracks before suggesting them if you are unsure about exact titles, OR use the get_trending_music tool to see what is currently popular and new! If you are not intimately familiar with the tracks in the user's history, USE the get_track_info tool to look up their genres and release years so you can search for similar music!`;
   let userPrompt = "";
   if (recentListens.length > 0) {
     userPrompt = `
@@ -156,6 +183,21 @@ Mix in some brand new/trending tracks if they fit the user's taste!
           required: []
         }
       }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'get_track_info',
+        description: 'Retrieve detailed metadata about a specific music track (e.g., genre, release date) to better understand the user\'s taste before generating recommendations.',
+        parameters: {
+          type: 'object',
+          properties: {
+            artist: { type: 'string', description: 'The name of the artist.' },
+            title: { type: 'string', description: 'The title of the track.' }
+          },
+          required: ['artist', 'title']
+        }
+      }
     }
   ];
 
@@ -200,9 +242,10 @@ Mix in some brand new/trending tracks if they fit the user's taste!
         for (const toolCall of message.tool_calls) {
           if (toolCall.function.name === 'search_music_database') {
             const args = JSON.parse(toolCall.function.arguments || '{}');
+            const query = args.query || '';
             const provider = args.provider || 'itunes';
-            console.log(`AI called search_music_database with query: ${args.query}, provider: ${provider}`);
-            const searchResults = await searchMusicDatabase(args.query, provider);
+            console.log(`AI called search_music_database with query: ${query}, provider: ${provider}`);
+            const searchResults = await searchMusicDatabase(query, provider);
             messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(searchResults) });
           } else if (toolCall.function.name === 'get_trending_music') {
             const args = JSON.parse(toolCall.function.arguments || '{}');
@@ -212,6 +255,13 @@ Mix in some brand new/trending tracks if they fit the user's taste!
             console.log(`AI called get_trending_music with genre_id: ${genreId}, limit: ${limit}, country: ${country}`);
             const trendingResults = await getTrendingMusic(genreId, limit, country);
             messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(trendingResults) });
+          } else if (toolCall.function.name === 'get_track_info') {
+            const args = JSON.parse(toolCall.function.arguments || '{}');
+            const artist = args.artist || '';
+            const title = args.title || '';
+            console.log(`AI called get_track_info with artist: ${artist}, title: ${title}`);
+            const infoResults = await getTrackInfo(artist, title);
+            messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(infoResults) });
           }
         }
         // Continue loop to send tool results back to AI
