@@ -78,4 +78,56 @@ describe('AI Service', () => {
     expect(recs.length).toBe(1);
     expect(recs[0].title).toBe('Rec 1');
   });
+
+  it('should handle tool calls for iTunes search', async () => {
+    getSetting.mockImplementation((key) => {
+      if (key === 'openrouter_key') return 'test_key';
+      if (key === 'ai_model') return 'test_model';
+      return null;
+    });
+
+    getAllRecentListens.mockResolvedValue([]);
+    dbAll.mockResolvedValue([]);
+
+    const toolCallMessage = {
+      tool_calls: [
+        {
+          id: 'call_123',
+          function: {
+            name: 'search_music_database',
+            arguments: JSON.stringify({ query: 'Daft Punk' })
+          }
+        }
+      ]
+    };
+
+    const mockAiResponse = [
+      { title: 'Get Lucky', artist: 'Daft Punk', album: 'Random Access Memories' }
+    ];
+
+    const finalMessage = {
+      content: JSON.stringify(mockAiResponse)
+    };
+
+    // First call returns a tool call, second call returns the final JSON
+    axios.post
+      .mockResolvedValueOnce({ data: { choices: [{ message: toolCallMessage }] } })
+      .mockResolvedValueOnce({ data: { choices: [{ message: finalMessage }] } });
+
+    // Mock iTunes GET request
+    axios.get.mockResolvedValueOnce({
+      data: {
+        results: [
+          { artistName: 'Daft Punk', trackName: 'Get Lucky', collectionName: 'RAM', primaryGenreName: 'Electronic' }
+        ]
+      }
+    });
+
+    const recs = await generateRecommendations(1);
+    expect(recs.length).toBe(1);
+    expect(recs[0].title).toBe('Get Lucky');
+    expect(axios.post).toHaveBeenCalledTimes(2); // Initial + tool result
+    expect(axios.get).toHaveBeenCalledTimes(1); // iTunes search
+    expect(axios.get).toHaveBeenCalledWith(expect.stringContaining('itunes.apple.com/search?term=Daft%20Punk'), expect.any(Object));
+  });
 });
