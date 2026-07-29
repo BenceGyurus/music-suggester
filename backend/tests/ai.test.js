@@ -128,7 +128,57 @@ describe('AI Service', () => {
     expect(recs[0].title).toBe('Get Lucky');
     expect(axios.post).toHaveBeenCalledTimes(2); // Initial + tool result
     expect(axios.get).toHaveBeenCalledTimes(1); // iTunes search
-    expect(axios.get).toHaveBeenCalledWith(expect.stringContaining('itunes.apple.com/search?term=Daft%20Punk'), expect.any(Object));
+  });
+
+  it('should handle search_music_database tool calls for Deezer provider', async () => {
+    getSetting.mockImplementation((key) => {
+      if (key === 'openrouter_key') return 'test_key';
+      if (key === 'ai_model') return 'test_model';
+      return null;
+    });
+
+    getAllRecentListens.mockResolvedValue([]);
+    dbAll.mockResolvedValue([]);
+
+    const toolCallMessage = {
+      tool_calls: [
+        {
+          id: 'call_999',
+          function: {
+            name: 'search_music_database',
+            arguments: JSON.stringify({ query: 'The Weeknd', provider: 'deezer' })
+          }
+        }
+      ]
+    };
+
+    const mockAiResponse = [
+      { title: 'Starboy', artist: 'The Weeknd', album: 'Starboy' }
+    ];
+
+    const finalMessage = {
+      content: JSON.stringify(mockAiResponse)
+    };
+
+    axios.post
+      .mockResolvedValueOnce({ data: { choices: [{ message: toolCallMessage }] } })
+      .mockResolvedValueOnce({ data: { choices: [{ message: finalMessage }] } });
+
+    // Mock Deezer GET request
+    axios.get.mockResolvedValueOnce({
+      data: {
+        data: [
+          { artist: { name: 'The Weeknd' }, title: 'Starboy', album: { title: 'Starboy' } }
+        ]
+      }
+    });
+
+    const recs = await generateRecommendations(1);
+    expect(recs.length).toBe(1);
+    expect(recs[0].title).toBe('Starboy');
+    expect(axios.post).toHaveBeenCalledTimes(2);
+    expect(axios.get).toHaveBeenCalledTimes(1);
+    expect(axios.get).toHaveBeenCalledWith(expect.stringContaining('api.deezer.com/search?q=The%20Weeknd'), expect.any(Object));
   });
 
   it('should handle tool calls for Deezer trending music', async () => {

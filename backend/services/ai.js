@@ -2,19 +2,31 @@ const axios = require('axios');
 const { getSetting, dbAll } = require('../database');
 const { getAllRecentListens } = require('./navidrome');
 
-async function searchITunes(term) {
+async function searchMusicDatabase(term, provider = 'itunes') {
   try {
-    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=song&limit=10`;
-    const response = await axios.get(url, { timeout: 10000 });
-    const results = response.data.results || [];
-    return results.map(r => ({
-      artist: r.artistName,
-      title: r.trackName,
-      album: r.collectionName,
-      genre: r.primaryGenreName
-    }));
+    if (provider === 'deezer') {
+      const url = `https://api.deezer.com/search?q=${encodeURIComponent(term)}&limit=10`;
+      const response = await axios.get(url, { timeout: 10000 });
+      const results = response.data.data || [];
+      return results.map(r => ({
+        artist: r.artist.name,
+        title: r.title,
+        album: r.album.title
+      }));
+    } else {
+      // Default to iTunes
+      const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=song&limit=10`;
+      const response = await axios.get(url, { timeout: 10000 });
+      const results = response.data.results || [];
+      return results.map(r => ({
+        artist: r.artistName,
+        title: r.trackName,
+        album: r.collectionName,
+        genre: r.primaryGenreName
+      }));
+    }
   } catch (error) {
-    console.error('iTunes Search Error:', error.message);
+    console.error('Search Database Error:', error.message);
     return [];
   }
 }
@@ -89,13 +101,17 @@ Recommend ${count} new tracks similar to Recent but exclude Disliked and Past. M
       type: "function",
       function: {
         name: "search_music_database",
-        description: "Search iTunes database for artists or genres to get real existing track names and albums. Use this to avoid hallucinating tracks.",
+        description: "Search iTunes or Deezer database for artists, genres, or tracks to get real existing track names and albums. Use this to avoid hallucinating tracks when you aren't looking for just the top trending hits.",
         parameters: {
           type: "object",
           properties: {
             query: {
               type: "string",
               description: "The search term, e.g. an artist name like 'Daft Punk' or a genre."
+            },
+            provider: {
+              type: "string",
+              description: "The provider to search on: 'itunes' or 'deezer'. Default is 'itunes'."
             }
           },
           required: ["query"]
@@ -160,8 +176,9 @@ Recommend ${count} new tracks similar to Recent but exclude Disliked and Past. M
         for (const toolCall of message.tool_calls) {
           if (toolCall.function.name === 'search_music_database') {
             const args = JSON.parse(toolCall.function.arguments || '{}');
-            console.log(`AI called search_music_database with query: ${args.query}`);
-            const searchResults = await searchITunes(args.query);
+            const provider = args.provider || 'itunes';
+            console.log(`AI called search_music_database with query: ${args.query}, provider: ${provider}`);
+            const searchResults = await searchMusicDatabase(args.query, provider);
             messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(searchResults) });
           } else if (toolCall.function.name === 'get_trending_music') {
             const args = JSON.parse(toolCall.function.arguments || '{}');
