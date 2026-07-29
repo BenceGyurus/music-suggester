@@ -82,7 +82,7 @@ async function generateRecommendations(count = 5) {
   const dislikeStr = dislikes.map(d => `${d.artist}-${d.name}`).join(';');
   const pastStr = pastRecommendations.map(p => `${p.artist}-${p.title}`).join(';');
 
-  const systemPrompt = `You are a music recommender. You MUST return ONLY a JSON array of ${count} track objects with "title", "artist", and "album" keys. No markdown, no explanations, just valid JSON array. You have access to tools to search real music databases. USE THEM to find real tracks before suggesting them if you are unsure about exact titles, OR use the get_trending_music tool to see what is currently popular and new!`;
+  const systemPrompt = `You are a music recommender. You MUST return ONLY a JSON array of ${count} track objects with "title", "artist", and "album" keys. CRITICAL: Do NOT output any markdown, explanations, or conversational text. Output ONLY the raw JSON array. You have access to tools to search real music databases. USE THEM to find real tracks before suggesting them if you are unsure about exact titles, OR use the get_trending_music tool to see what is currently popular and new!`;
   const userPrompt = `
 Recent: ${recentStr.substring(0, 500)}
 Disliked: ${dislikeStr.substring(0, 500)}
@@ -195,9 +195,21 @@ Recommend ${count} new tracks similar to Recent but exclude Disliked and Past. M
         }
         // Continue loop to send tool results back to AI
       } else {
-        // No tool calls, AI provided the final response
-        finalContent = message.content;
-        break;
+        // No tool calls. Check if it looks like JSON
+        let text = message.content || '';
+        let cleanText = text.replace(/```(?:json)?\s*([\s\S]*?)\s*```/g, '$1').trim();
+        
+        if (cleanText.startsWith('[') || cleanText.startsWith('{')) {
+          finalContent = cleanText;
+          break; // Valid JSON answer
+        } else {
+          console.log(`AI returned conversational text: "${text.substring(0, 50)}...", asking to correct.`);
+          messages.push({
+            role: 'user',
+            content: 'Invalid response. You MUST return ONLY a JSON array, or use a tool. Do NOT output conversational text, explanations, or acknowledge this message.'
+          });
+          continue; // Loop again
+        }
       }
     } catch (error) {
       console.error('AI Recommendation Error during API call:', error.response ? error.response.data : error.message);
