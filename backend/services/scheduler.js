@@ -8,8 +8,11 @@ let isProcessingQueue = false;
 async function runRecommendationJob() {
   console.log('Running scheduled recommendation job...');
   try {
-    // Generate 5 recommendations
-    const recommendations = await generateRecommendations(5);
+    const maxRecsStr = await getSetting('max_recommendations', '5');
+    const maxRecs = parseInt(maxRecsStr) || 5;
+
+    // Generate recommendations
+    const recommendations = await generateRecommendations(maxRecs);
     
     for (const rec of recommendations) {
       if (rec.title && rec.artist) {
@@ -70,8 +73,8 @@ async function processQueue() {
 }
 
 function initScheduler() {
-  // Run recommendation job every 12 hours
-  cron.schedule('0 */12 * * *', runRecommendationJob);
+  // Run recommendation job daily at midnight
+  cron.schedule('0 0 * * *', runRecommendationJob);
   
   // Process download queue every 30 seconds
   cron.schedule('*/30 * * * * *', processQueue);

@@ -162,6 +162,19 @@ function Settings() {
           </div>
 
           <div className="form-group">
+            <label>Max AI Recommendations per Batch</label>
+            <input 
+              type="number" 
+              name="max_recommendations" 
+              value={settings.max_recommendations || '5'} 
+              onChange={handleSettingChange} 
+              className="glass-input" 
+              min="1"
+              max="50"
+            />
+          </div>
+
+          <div className="form-group">
             <label>Auto-queue Downloads</label>
             <select 
               name="auto_download" 
