@@ -10,6 +10,7 @@ To handle the actual music downloading, this application depends on an external 
 
 ## Features
 - **AI Recommendations**: Uses OpenRouter (e.g., Gemini Flash, Claude) to recommend tracks based on what you actually listen to.
+- **AI Tool Calling (Zero Hallucinations)**: The AI is equipped with tools to query the **iTunes Search API** to guarantee real track names, and the **Deezer API** to fetch the latest trending music – all completely free and without requiring API keys!
 - **Navidrome Integration**: Fetches your recently played tracks across multiple Navidrome accounts using the Subsonic API. (If no account is linked, it automatically looks at the newest files in your library folder!)
 - **Duplicate Prevention**: Checks both your local `navidrome_library` directory and the Downloader's API to prevent duplicate downloads.
 - **Modern UI**: A sleek, dark-themed, glassmorphism UI for managing recommendations, disliking tracks (which trains the AI to avoid them), and tweaking settings.
