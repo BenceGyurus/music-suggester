@@ -221,8 +221,35 @@ Mix in some brand new/trending tracks if they fit the user's taste!
         let cleanText = text.replace(/```(?:json)?\s*([\s\S]*?)\s*```/g, '$1').trim();
         
         if (cleanText.startsWith('[') || cleanText.startsWith('{')) {
-          finalContent = cleanText;
-          break; // Valid JSON answer
+          try {
+            // Attempt to parse and validate right here inside the loop
+            let parsed = JSON.parse(cleanText);
+            if (!Array.isArray(parsed) && parsed.tracks) {
+                parsed = parsed.tracks;
+            } else if (!Array.isArray(parsed)) {
+                for (const key in parsed) {
+                    if (Array.isArray(parsed[key])) {
+                        parsed = parsed[key];
+                        break;
+                    }
+                }
+            }
+            
+            if (!Array.isArray(parsed)) {
+                throw new Error('Response is not a JSON array of tracks.');
+            }
+            
+            // If we reached here, parsing succeeded
+            finalContent = parsed;
+            break;
+          } catch (parseError) {
+            console.log(`AI returned invalid JSON structure: ${parseError.message}. Asking to correct.`);
+            messages.push({
+              role: 'user',
+              content: `Invalid JSON format: ${parseError.message}. You MUST return ONLY a valid JSON array of track objects. Do not wrap it in other fields unless necessary, and do not output markdown or conversational text.`
+            });
+            continue;
+          }
         } else {
           console.log(`AI returned conversational text: "${text.substring(0, 50)}...", asking to correct.`);
           messages.push({
@@ -242,29 +269,8 @@ Mix in some brand new/trending tracks if they fit the user's taste!
     throw new Error('AI failed to generate a final response after maximum iterations.');
   }
 
-  // Clean markdown if present
-  let content = finalContent.replace(/```json/g, '').replace(/```/g, '').trim();
-  
-  // Some models wrap the array in an object if response_format is used
-  let parsed = JSON.parse(content);
-  if (!Array.isArray(parsed) && parsed.tracks) {
-      parsed = parsed.tracks;
-  } else if (!Array.isArray(parsed)) {
-      // Find the first array in values
-      for (const key in parsed) {
-          if (Array.isArray(parsed[key])) {
-              parsed = parsed[key];
-              break;
-          }
-      }
-  }
-  
-  if (!Array.isArray(parsed)) {
-      throw new Error('AI response could not be parsed as an array of tracks');
-  }
-
-  console.log(`Successfully generated ${parsed.length} recommendations.`);
-  return parsed.slice(0, count);
+  console.log(`Successfully generated ${finalContent.length} recommendations.`);
+  return finalContent.slice(0, count);
 }
 
 module.exports = {
