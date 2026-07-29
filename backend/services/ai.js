@@ -19,18 +19,33 @@ async function searchITunes(term) {
   }
 }
 
-async function getTrendingMusic(genreId = 0, limit = 15) {
+async function getTrendingMusic(genreId = 0, limit = 15, country = null) {
   try {
-    const url = `https://api.deezer.com/chart/${genreId}/tracks?limit=${limit}`;
-    const response = await axios.get(url, { timeout: 10000 });
-    const results = response.data.data || [];
-    return results.map(r => ({
-      artist: r.artist.name,
-      title: r.title,
-      album: r.album.title
-    }));
+    if (country) {
+      // Use iTunes RSS for country-specific charts
+      const url = `https://itunes.apple.com/${country.toLowerCase()}/rss/topsongs/limit=${limit}/json`;
+      const response = await axios.get(url, { timeout: 10000 });
+      const entries = response.data.feed.entry || [];
+      // Sometimes if limit=1, entry is an object, not array
+      const results = Array.isArray(entries) ? entries : [entries];
+      return results.map(r => ({
+        artist: r['im:artist'] ? r['im:artist'].label : 'Unknown',
+        title: r['im:name'] ? r['im:name'].label : 'Unknown',
+        album: r['im:collection'] && r['im:collection']['im:name'] ? r['im:collection']['im:name'].label : 'Unknown'
+      }));
+    } else {
+      // Use Deezer for global / genre charts
+      const url = `https://api.deezer.com/chart/${genreId}/tracks?limit=${limit}`;
+      const response = await axios.get(url, { timeout: 10000 });
+      const results = response.data.data || [];
+      return results.map(r => ({
+        artist: r.artist.name,
+        title: r.title,
+        album: r.album.title
+      }));
+    }
   } catch (error) {
-    console.error('Deezer Chart Error:', error.message);
+    console.error('Trending Chart Error:', error.message);
     return [];
   }
 }
@@ -91,17 +106,21 @@ Recommend ${count} new tracks similar to Recent but exclude Disliked and Past. M
       type: "function",
       function: {
         name: "get_trending_music",
-        description: "Get the current top trending and newest tracks globally or by specific genre. Use this to discover brand new music to recommend.",
+        description: "Get the current top trending and newest tracks globally, by specific genre, or by country. Use this to discover brand new music to recommend.",
         parameters: {
           type: "object",
           properties: {
             genre_id: {
               type: "integer",
-              description: "Optional Deezer genre ID. Use 0 for All/Global, 132 for Pop, 116 for Rap/Hip Hop, 152 for Rock, 113 for Dance, 165 for R&B, 85 for Alternative, 106 for Electro, 129 for Jazz, 98 for Classical. Default is 0."
+              description: "Optional Deezer genre ID. Use 0 for All/Global, 132 for Pop, 116 for Rap/Hip Hop, 152 for Rock, 113 for Dance, 165 for R&B, 85 for Alternative, 106 for Electro, 129 for Jazz, 98 for Classical. Default is 0. Ignored if country is set."
             },
             limit: {
               type: "integer",
               description: "Optional number of tracks to fetch. Default is 15."
+            },
+            country: {
+              type: "string",
+              description: "Optional 2-letter country code (e.g., 'HU', 'US', 'GB') to get country-specific trending charts. If provided, genre_id is ignored."
             }
           },
           required: []
@@ -148,8 +167,9 @@ Recommend ${count} new tracks similar to Recent but exclude Disliked and Past. M
             const args = JSON.parse(toolCall.function.arguments || '{}');
             const genreId = args.genre_id !== undefined ? args.genre_id : 0;
             const limit = args.limit !== undefined ? args.limit : 15;
-            console.log(`AI called get_trending_music with genre_id: ${genreId}, limit: ${limit}`);
-            const trendingResults = await getTrendingMusic(genreId, limit);
+            const country = args.country || null;
+            console.log(`AI called get_trending_music with genre_id: ${genreId}, limit: ${limit}, country: ${country}`);
+            const trendingResults = await getTrendingMusic(genreId, limit, country);
             messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(trendingResults) });
           }
         }

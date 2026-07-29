@@ -178,4 +178,58 @@ describe('AI Service', () => {
     expect(recs[0].title).toBe('New Hit');
     expect(axios.get).toHaveBeenCalledWith('https://api.deezer.com/chart/132/tracks?limit=5', expect.any(Object));
   });
+
+  it('should handle tool calls for country specific trending music via iTunes RSS', async () => {
+    getSetting.mockImplementation((key) => {
+      if (key === 'openrouter_key') return 'test_key';
+      if (key === 'ai_model') return 'test_model';
+      return null;
+    });
+
+    getAllRecentListens.mockResolvedValue([]);
+    dbAll.mockResolvedValue([]);
+
+    const toolCallMessage = {
+      tool_calls: [
+        {
+          id: 'call_789',
+          function: {
+            name: 'get_trending_music',
+            arguments: JSON.stringify({ country: 'HU', limit: 3 })
+          }
+        }
+      ]
+    };
+
+    const mockAiResponse = [
+      { title: 'Hungarian Hit', artist: 'HU Star', album: 'HU Album' }
+    ];
+
+    const finalMessage = {
+      content: JSON.stringify(mockAiResponse)
+    };
+
+    axios.post
+      .mockResolvedValueOnce({ data: { choices: [{ message: toolCallMessage }] } })
+      .mockResolvedValueOnce({ data: { choices: [{ message: finalMessage }] } });
+
+    axios.get.mockResolvedValueOnce({
+      data: {
+        feed: {
+          entry: [
+            {
+              'im:artist': { label: 'HU Star' },
+              'im:name': { label: 'Hungarian Hit' },
+              'im:collection': { 'im:name': { label: 'HU Album' } }
+            }
+          ]
+        }
+      }
+    });
+
+    const recs = await generateRecommendations(1);
+    expect(recs.length).toBe(1);
+    expect(recs[0].title).toBe('Hungarian Hit');
+    expect(axios.get).toHaveBeenCalledWith('https://itunes.apple.com/hu/rss/topsongs/limit=3/json', expect.any(Object));
+  });
 });
