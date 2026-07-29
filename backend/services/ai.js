@@ -345,6 +345,19 @@ Mix in some brand new/trending tracks if they fit the user's taste!
             if (!Array.isArray(parsed)) {
                 throw new Error('Response is not a JSON array of tracks.');
             }
+
+            // Ensure the array actually contains track objects, not just strings
+            if (parsed.length > 0) {
+                const first = parsed[0];
+                if (typeof first !== 'object' || first === null) {
+                    throw new Error('The array must contain JSON objects, not strings or numbers.');
+                }
+                const hasTitle = first.title || first.Title || first.TITLE;
+                const hasArtist = first.artist || first.Artist || first.ARTIST;
+                if (!hasTitle || !hasArtist) {
+                    throw new Error('Track objects MUST have "title" and "artist" keys.');
+                }
+            }
             
             // If we reached here, parsing succeeded
             finalContent = parsed;
