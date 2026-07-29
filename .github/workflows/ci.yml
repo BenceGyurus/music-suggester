@@ -12,7 +12,9 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  # GitHub Container Registry requires the image name to be completely lowercase.
+  # Using ${{ github.repository }} directly fails if the username has uppercase letters (like BenceGyurus).
+  IMAGE_NAME: bencegyurus/music-suggester
 
 jobs:
   test:
