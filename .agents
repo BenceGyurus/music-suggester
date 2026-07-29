@@ -1,3 +1,16 @@
 name: auto-music-suggester
 description: AI-powered background music suggester and downloader integration for Navidrome.
 version: 1.0.0
+
+instructions: |
+  # Project Architecture & Stack
+  - Backend: Node.js (Express), SQLite (database.js), node-cron (scheduler.js)
+  - Frontend: React (Vite), Vanilla CSS (glassmorphism UI)
+  - DevOps: Docker, GitHub Actions (CI/CD)
+
+  # Development Guidelines
+  - When implementing a NEW feature or modifying existing logic, YOU MUST ALWAYS write unit tests for the backend (Jest) before completing the task.
+  - The CI/CD pipeline runs unit tests on every push to the `main` branch. Ensure tests pass before pushing.
+  - Keep AI prompts token-efficient (e.g., using semi-colon separated lists instead of verbose context).
+  - Use modern, dark-themed UI components for any frontend additions.
+  - Check duplicates locally (`/music` mount) and via Downloader API before queuing downloads.
