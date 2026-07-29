@@ -2,24 +2,29 @@
 
 An AI-powered application that automatically recommends and downloads music based on your recent listening habits from Navidrome, and intelligently queues downloads without overloading your download server or introducing duplicates.
 
+This tool acts as the "brain" for your music downloading pipeline, automating the discovery of new music you'll love.
+
+## Dependencies
+
+To handle the actual music downloading, this application depends on an external download API. Specifically, it is designed to work out-of-the-box with **[Musikat](https://github.com/soggy8/musikat)** (or any downloader that implements the same API endpoints for `/api/search`, `/api/download`, and `/api/track/{id}/exists`). You will need to have Musikat (or an equivalent service) running alongside this application.
+
 ## Features
-- **AI Recommendations**: Uses OpenRouter (e.g., Gemini Flash) to recommend tracks.
-- **Navidrome Integration**: Fetches your recently played tracks across multiple Navidrome accounts using the Subsonic API.
+- **AI Recommendations**: Uses OpenRouter (e.g., Gemini Flash, Claude) to recommend tracks based on what you actually listen to.
+- **Navidrome Integration**: Fetches your recently played tracks across multiple Navidrome accounts using the Subsonic API. (If no account is linked, it automatically looks at the newest files in your library folder!)
 - **Duplicate Prevention**: Checks both your local `navidrome_library` directory and the Downloader's API to prevent duplicate downloads.
-- **Modern UI**: A sleek, dark-themed, glassmorphism UI for managing recommendations and settings.
+- **Modern UI**: A sleek, dark-themed, glassmorphism UI for managing recommendations, disliking tracks (which trains the AI to avoid them), and tweaking settings.
 - **Smart Queueing**: Slowly processes recommendations in the background to avoid rate limits on your downloader.
-- **Continuous Delivery**: Fully Dockerized with GitHub Actions for automated GHCR publishing and semantic versioning releases.
 
 ## Installation (Docker)
 
-Use the provided `docker-compose.yml`:
+Use the provided `docker-compose.yml` to get started:
 
 ```yaml
 version: '3.8'
 
 services:
   auto-music-suggester:
-    image: ghcr.io/YOUR_GITHUB_USERNAME/auto-music-suggester:latest
+    image: ghcr.io/bencegyurus/music-suggester:latest
     ports:
       - "3001:3001"
     volumes:
