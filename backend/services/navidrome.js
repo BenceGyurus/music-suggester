@@ -105,6 +105,11 @@ async function getAllRecentListens() {
       const listens = await getRecentlyPlayedForAccount(account);
       allListens.push(...listens);
     }
+    // If API requests failed or yielded 0 tracks, try falling back to files
+    if (allListens.length === 0) {
+      console.log('Navidrome API yielded 0 tracks (or failed). Falling back to local files...');
+      allListens = await getRecentListensFromFiles();
+    }
   }
 
   // Deduplicate by artist + title

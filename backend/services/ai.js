@@ -83,13 +83,23 @@ async function generateRecommendations(count = 5) {
   const pastStr = pastRecommendations.map(p => `${p.artist}-${p.title}`).join(';');
 
   const systemPrompt = `You are a music recommender. You MUST return ONLY a JSON array of ${count} track objects with "title", "artist", and "album" keys. CRITICAL: Do NOT output any markdown, explanations, or conversational text. Output ONLY the raw JSON array. You have access to tools to search real music databases. USE THEM to find real tracks before suggesting them if you are unsure about exact titles, OR use the get_trending_music tool to see what is currently popular and new!`;
-  const userPrompt = `
+  let userPrompt = "";
+  if (recentListens.length > 0) {
+    userPrompt = `
 Recent: ${recentStr.substring(0, 500)}
 Disliked: ${dislikeStr.substring(0, 500)}
 Past: ${pastStr.substring(0, 500)}
 
 Recommend ${count} new tracks similar to Recent but exclude Disliked and Past. Mix in some brand new/trending tracks if they fit the user's taste!
 `;
+  } else {
+    userPrompt = `
+Previously Downloaded: ${pastStr.substring(0, 500)}
+Disliked: ${dislikeStr.substring(0, 500)}
+
+Recommend ${count} new tracks similar to Previously Downloaded tracks but strictly exclude Disliked tracks. Mix in some brand new/trending tracks if they fit the user's taste!
+`;
+  }
 
   let messages = [
     { role: 'system', content: systemPrompt },
