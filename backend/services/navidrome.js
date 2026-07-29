@@ -117,6 +117,7 @@ async function getAllRecentListens() {
     }
   }
 
+  console.log(`Found ${uniqueListens.length} unique recent listens from Navidrome/Local files.`);
   return uniqueListens;
 }
 

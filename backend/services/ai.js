@@ -148,8 +148,11 @@ Recommend ${count} new tracks similar to Recent but exclude Disliked and Past. M
   let maxIterations = 3;
   let finalContent = null;
 
+  console.log(`Generating ${count} recommendations using model: ${aiModel}...`);
+
   for (let i = 0; i < maxIterations; i++) {
     try {
+      console.log(`[AI Iteration ${i + 1}/${maxIterations}] Waiting for response...`);
       const response = await axios.post(
         'https://openrouter.ai/api/v1/chat/completions',
         {
@@ -227,6 +230,7 @@ Recommend ${count} new tracks similar to Recent but exclude Disliked and Past. M
       throw new Error('AI response could not be parsed as an array of tracks');
   }
 
+  console.log(`Successfully generated ${parsed.length} recommendations.`);
   return parsed.slice(0, count);
 }
 
