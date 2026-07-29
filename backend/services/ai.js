@@ -86,18 +86,22 @@ async function generateRecommendations(count = 5) {
   let userPrompt = "";
   if (recentListens.length > 0) {
     userPrompt = `
-Recent: ${recentStr.substring(0, 500)}
+Recent Listens: ${recentStr.substring(0, 500)}
+Previously Downloaded: ${pastStr.substring(0, 500)}
 Disliked: ${dislikeStr.substring(0, 500)}
-Past: ${pastStr.substring(0, 500)}
 
-Recommend ${count} new tracks similar to Recent but exclude Disliked and Past. Mix in some brand new/trending tracks if they fit the user's taste!
+Recommend ${count} new tracks whose style is a mix of the 'Recent Listens' and 'Previously Downloaded' tracks. 
+CRITICAL: You must STRICTLY EXCLUDE the exact tracks listed in 'Disliked' and 'Previously Downloaded'. 
+Mix in some brand new/trending tracks if they fit the user's taste!
 `;
   } else {
     userPrompt = `
 Previously Downloaded: ${pastStr.substring(0, 500)}
 Disliked: ${dislikeStr.substring(0, 500)}
 
-Recommend ${count} new tracks similar to Previously Downloaded tracks but strictly exclude Disliked tracks. Mix in some brand new/trending tracks if they fit the user's taste!
+Recommend ${count} new tracks whose style is similar to the 'Previously Downloaded' tracks.
+CRITICAL: You must STRICTLY EXCLUDE the exact tracks listed in 'Disliked' and 'Previously Downloaded'. 
+Mix in some brand new/trending tracks if they fit the user's taste!
 `;
   }
 
