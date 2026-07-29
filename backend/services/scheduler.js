@@ -15,13 +15,17 @@ async function runRecommendationJob() {
     const recommendations = await generateRecommendations(maxRecs);
     
     for (const rec of recommendations) {
-      if (rec.title && rec.artist) {
+      const title = rec.title || rec.Title || rec.TITLE;
+      const artist = rec.artist || rec.Artist || rec.ARTIST;
+      const album = rec.album || rec.Album || rec.ALBUM || '';
+
+      if (title && artist) {
         // Check if already in history
-        const existing = await dbGet('SELECT id FROM history WHERE title = ? AND artist = ?', [rec.title, rec.artist]);
+        const existing = await dbGet('SELECT id FROM history WHERE title = ? AND artist = ?', [title, artist]);
         if (!existing) {
           await dbRun(
             'INSERT INTO history (title, artist, album, status) VALUES (?, ?, ?, ?)',
-            [rec.title, rec.artist, rec.album || '', 'recommended']
+            [title, artist, album, 'recommended']
           );
         }
       }
