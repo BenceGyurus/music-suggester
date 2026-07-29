@@ -69,9 +69,9 @@ app.delete('/api/accounts/:id', async (req, res) => {
 // --- Recommendations API ---
 app.get('/api/recommendations', async (req, res) => {
   try {
-    // Return all tracks that are not failed or downloaded, plus recent ones
+    // Return all tracks so the frontend can display their status (including failed ones)
     const limit = parseInt(req.query.limit) || 20;
-    const tracks = await dbAll("SELECT * FROM history WHERE status != 'failed' ORDER BY recommended_at DESC LIMIT ?", [limit]);
+    const tracks = await dbAll("SELECT * FROM history ORDER BY recommended_at DESC LIMIT ?", [limit]);
     res.json(tracks);
   } catch (error) {
     res.status(500).json({ error: error.message });

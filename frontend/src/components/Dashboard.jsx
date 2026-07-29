@@ -137,14 +137,24 @@ function Dashboard() {
                     </button>
                   )}
                   {track.status === 'downloaded' && (
-                    <button className="glass-button" disabled style={{background: 'rgba(16, 185, 129, 0.2)', color: 'var(--success-color)', border: '1px solid rgba(16, 185, 129, 0.4)'}}>
-                      <Check size={16} /> Downloaded
-                    </button>
+                    <>
+                      <button className="glass-button" disabled style={{background: 'rgba(16, 185, 129, 0.2)', color: 'var(--success-color)', border: '1px solid rgba(16, 185, 129, 0.4)'}}>
+                        <Check size={16} /> Downloaded
+                      </button>
+                      <button className="glass-button danger" onClick={() => handleDislike(track)}>
+                        <X size={16} /> Dislike
+                      </button>
+                    </>
                   )}
                   {track.status === 'failed' && (
-                    <button className="glass-button danger" disabled style={{opacity: 0.9}}>
-                      <AlertTriangle size={16} /> Failed
-                    </button>
+                    <>
+                      <button className="glass-button danger" disabled style={{opacity: 0.9}}>
+                        <AlertTriangle size={16} /> Failed
+                      </button>
+                      <button className="glass-button danger" onClick={() => handleDislike(track)}>
+                        <X size={16} /> Dislike
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
