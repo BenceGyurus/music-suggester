@@ -141,18 +141,33 @@ async function generateRecommendations(count = 5) {
   const recentListens = await getAllRecentListens();
   const dislikes = await dbAll('SELECT name, artist FROM dislikes');
   const pastRecommendations = await dbAll('SELECT title, artist FROM history ORDER BY recommended_at DESC LIMIT 100');
+  // 1. Break into smaller context to prevent overwhelming small models
+  // Limit to 15 recent, 5 frequent, 10 past, 5 dislikes
+  const smallRecentListens = recentListens.slice(0, 15);
+  const smallDislikes = dislikes.slice(0, 5);
+  const smallPastRecs = pastRecommendations.slice(0, 10);
 
-  const recentStr = recentListens.map(r => `${r.artist}-${r.title}`).join(';');
-  const dislikeStr = dislikes.map(d => `${d.artist}-${d.name}`).join(';');
-  const pastStr = pastRecommendations.map(p => `${p.artist}-${p.title}`).join(';');
+  const recentStr = smallRecentListens.map(r => `${r.artist}-${r.title}`).join('; ');
+  const dislikeStr = smallDislikes.map(d => `${d.artist}-${d.name}`).join('; ');
+  const pastStr = smallPastRecs.map(p => `${p.artist}-${p.title}`).join('; ');
 
-  const systemPrompt = `You are a music recommender. You MUST return ONLY a JSON array of ${count} track objects with "title", "artist", and "album" keys. CRITICAL: Do NOT output any markdown, explanations, or conversational text. Output ONLY the raw JSON array. You have access to tools to search real music databases. USE THEM to find real tracks before suggesting them if you are unsure about exact titles, OR use the get_trending_music tool to see what is currently popular and new! If you are not intimately familiar with the tracks in the user's history, USE the get_track_info tool to look up their genres and release years so you can search for similar music! If the user wants to discover new, smaller underground artists based on their library, USE the discover_similar_artists tool!`;
+  // 2. Provide explicit JSON example in system prompt
+  const systemPrompt = `You are a music recommender. You MUST return ONLY a JSON array of ${count} track objects. 
+CRITICAL: Do NOT output any markdown, explanations, or conversational text. Output ONLY the raw JSON array. 
+You must strictly follow this exact JSON format:
+[
+  { "title": "Track Name", "artist": "Artist Name", "album": "Album Name" },
+  { "title": "Track Name 2", "artist": "Artist Name 2", "album": "Album Name 2" }
+]
+
+You have access to tools to search real music databases. USE THEM to find real tracks before suggesting them if you are unsure about exact titles, OR use the get_trending_music tool to see what is currently popular and new! If you are not intimately familiar with the tracks in the user's history, USE the get_track_info tool to look up their genres and release years so you can search for similar music! If the user wants to discover new, smaller underground artists based on their library, USE the discover_similar_artists tool!`;
+
   let userPrompt = "";
-  if (recentListens.length > 0) {
+  if (smallRecentListens.length > 0) {
     userPrompt = `
-Recent Listens: ${recentStr.substring(0, 500)}
-Previously Downloaded: ${pastStr.substring(0, 500)}
-Disliked: ${dislikeStr.substring(0, 500)}
+Recent Listens: ${recentStr}
+Previously Downloaded: ${pastStr}
+Disliked: ${dislikeStr}
 
 Recommend ${count} new tracks whose style is a mix of the 'Recent Listens' and 'Previously Downloaded' tracks. 
 CRITICAL: You must STRICTLY EXCLUDE the exact tracks listed in 'Disliked' and 'Previously Downloaded'. 
@@ -160,8 +175,8 @@ Mix in some brand new/trending tracks if they fit the user's taste!
 `;
   } else {
     userPrompt = `
-Previously Downloaded: ${pastStr.substring(0, 500)}
-Disliked: ${dislikeStr.substring(0, 500)}
+Previously Downloaded: ${pastStr}
+Disliked: ${dislikeStr}
 
 Recommend ${count} new tracks whose style is similar to the 'Previously Downloaded' tracks.
 CRITICAL: You must STRICTLY EXCLUDE the exact tracks listed in 'Disliked' and 'Previously Downloaded'. 
