@@ -1,6 +1,3 @@
-const request = require('supertest');
-const app = require('../server');
-
 // Mock scheduler so it doesn't run intervals during tests
 jest.mock('../services/scheduler', () => ({
   initScheduler: jest.fn(),
@@ -14,6 +11,9 @@ jest.mock('../database', () => ({
   getSetting: jest.fn(),
   setSetting: jest.fn()
 }));
+
+const request = require('supertest');
+const app = require('../server');
 
 describe('Server Integration', () => {
   it('should serve index.html for unknown GET routes without throwing PathError', async () => {
