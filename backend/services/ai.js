@@ -278,9 +278,14 @@ Mix in some brand new/trending tracks if they fit the user's taste!
         }
       );
 
+      if (!response.data || !response.data.choices || response.data.choices.length === 0) {
+        console.error('OpenRouter returned an invalid response:', JSON.stringify(response.data));
+        throw new Error('OpenRouter API returned an invalid response or error: ' + JSON.stringify(response.data.error || 'Unknown Error'));
+      }
+
       const rawMessage = response.data.choices[0].message;
       const message = {
-        role: rawMessage.role,
+        role: rawMessage.role || 'assistant',
         content: rawMessage.content || ""
       };
       if (rawMessage.tool_calls) {
