@@ -14,6 +14,7 @@ function Settings() {
   });
   
   const [accounts, setAccounts] = useState([]);
+  const [models, setModels] = useState([]);
   const [newAccount, setNewAccount] = useState({ url: '', username: '', password_or_token: '', salt: '' });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
@@ -24,13 +25,15 @@ function Settings() {
 
   const fetchData = async () => {
     try {
-      const [settingsRes, accountsRes] = await Promise.all([
+      const [settingsRes, accountsRes, modelsRes] = await Promise.all([
         axios.get(`${API_BASE}/settings`),
-        axios.get(`${API_BASE}/accounts`)
+        axios.get(`${API_BASE}/accounts`),
+        axios.get(`${API_BASE}/models`)
       ]);
       
       setSettings(prev => ({...prev, ...settingsRes.data}));
       setAccounts(accountsRes.data);
+      setModels(modelsRes.data);
     } catch (err) {
       console.error(err);
     }
@@ -50,6 +53,11 @@ function Settings() {
       });
       await Promise.all(promises);
       setMsg('Settings saved successfully!');
+      
+      // Refetch models in case API key changed
+      const modelsRes = await axios.get(`${API_BASE}/models`);
+      setModels(modelsRes.data);
+
       setTimeout(() => setMsg(''), 3000);
     } catch (err) {
       console.error(err);
@@ -107,13 +115,27 @@ function Settings() {
 
           <div className="form-group">
             <label>AI Model</label>
-            <input 
-              type="text" 
-              name="ai_model" 
-              value={settings.ai_model || ''} 
-              onChange={handleSettingChange} 
-              className="glass-input" 
-            />
+            {models.length > 0 ? (
+              <select 
+                name="ai_model" 
+                value={settings.ai_model || ''} 
+                onChange={handleSettingChange} 
+                className="glass-input"
+              >
+                {models.map(m => (
+                  <option key={m.id} value={m.id}>{m.name || m.id}</option>
+                ))}
+              </select>
+            ) : (
+              <input 
+                type="text" 
+                name="ai_model" 
+                value={settings.ai_model || ''} 
+                onChange={handleSettingChange} 
+                className="glass-input" 
+                placeholder="Enter model ID or save API key to load..."
+              />
+            )}
           </div>
 
           <div className="form-group">

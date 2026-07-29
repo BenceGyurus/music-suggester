@@ -88,6 +88,30 @@ app.post('/api/recommendations/trigger', async (req, res) => {
   }
 });
 
+// --- OpenRouter Models API ---
+app.get('/api/models', async (req, res) => {
+  try {
+    const openRouterKey = await getSetting('openrouter_key');
+    if (!openRouterKey) {
+      return res.json([]);
+    }
+    
+    // Using dynamic import for axios just to be safe if it's already used elsewhere, but we can require it at top.
+    const axios = require('axios');
+    const response = await axios.get('https://openrouter.ai/api/v1/models', {
+      headers: {
+        'Authorization': `Bearer ${openRouterKey}`
+      }
+    });
+    
+    // Sort alphabetically by ID
+    const models = response.data.data.sort((a, b) => a.id.localeCompare(b.id));
+    res.json(models);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // --- Dislikes API ---
 app.post('/api/dislike', async (req, res) => {
   try {
