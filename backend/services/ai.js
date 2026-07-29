@@ -171,7 +171,14 @@ Recommend ${count} new tracks similar to Recent but exclude Disliked and Past. M
         }
       );
 
-      const message = response.data.choices[0].message;
+      const rawMessage = response.data.choices[0].message;
+      const message = {
+        role: rawMessage.role,
+        content: rawMessage.content || ""
+      };
+      if (rawMessage.tool_calls) {
+        message.tool_calls = rawMessage.tool_calls;
+      }
       messages.push(message);
 
       if (message.tool_calls && message.tool_calls.length > 0) {
