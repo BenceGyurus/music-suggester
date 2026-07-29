@@ -130,4 +130,52 @@ describe('AI Service', () => {
     expect(axios.get).toHaveBeenCalledTimes(1); // iTunes search
     expect(axios.get).toHaveBeenCalledWith(expect.stringContaining('itunes.apple.com/search?term=Daft%20Punk'), expect.any(Object));
   });
+
+  it('should handle tool calls for Deezer trending music', async () => {
+    getSetting.mockImplementation((key) => {
+      if (key === 'openrouter_key') return 'test_key';
+      if (key === 'ai_model') return 'test_model';
+      return null;
+    });
+
+    getAllRecentListens.mockResolvedValue([]);
+    dbAll.mockResolvedValue([]);
+
+    const toolCallMessage = {
+      tool_calls: [
+        {
+          id: 'call_456',
+          function: {
+            name: 'get_trending_music',
+            arguments: '{}'
+          }
+        }
+      ]
+    };
+
+    const mockAiResponse = [
+      { title: 'New Hit', artist: 'Pop Star', album: 'The Album' }
+    ];
+
+    const finalMessage = {
+      content: JSON.stringify(mockAiResponse)
+    };
+
+    axios.post
+      .mockResolvedValueOnce({ data: { choices: [{ message: toolCallMessage }] } })
+      .mockResolvedValueOnce({ data: { choices: [{ message: finalMessage }] } });
+
+    axios.get.mockResolvedValueOnce({
+      data: {
+        data: [
+          { artist: { name: 'Pop Star' }, title: 'New Hit', album: { title: 'The Album' } }
+        ]
+      }
+    });
+
+    const recs = await generateRecommendations(1);
+    expect(recs.length).toBe(1);
+    expect(recs[0].title).toBe('New Hit');
+    expect(axios.get).toHaveBeenCalledWith('https://api.deezer.com/chart/0/tracks', expect.any(Object));
+  });
 });

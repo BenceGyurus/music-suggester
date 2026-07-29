@@ -19,6 +19,22 @@ async function searchITunes(term) {
   }
 }
 
+async function getTrendingMusic() {
+  try {
+    const url = 'https://api.deezer.com/chart/0/tracks';
+    const response = await axios.get(url, { timeout: 10000 });
+    const results = response.data.data || [];
+    return results.slice(0, 15).map(r => ({
+      artist: r.artist.name,
+      title: r.title,
+      album: r.album.title
+    }));
+  } catch (error) {
+    console.error('Deezer Chart Error:', error.message);
+    return [];
+  }
+}
+
 /**
  * Generate AI music recommendations via OpenRouter.
  */
@@ -39,13 +55,13 @@ async function generateRecommendations(count = 5) {
   const dislikeStr = dislikes.map(d => `${d.artist}-${d.name}`).join(';');
   const pastStr = pastRecommendations.map(p => `${p.artist}-${p.title}`).join(';');
 
-  const systemPrompt = `You are a music recommender. You MUST return ONLY a JSON array of ${count} track objects with "title", "artist", and "album" keys. No markdown, no explanations, just valid JSON array. You have access to a tool to search real music databases. USE IT to find real tracks before suggesting them if you are unsure about exact titles.`;
+  const systemPrompt = `You are a music recommender. You MUST return ONLY a JSON array of ${count} track objects with "title", "artist", and "album" keys. No markdown, no explanations, just valid JSON array. You have access to tools to search real music databases. USE THEM to find real tracks before suggesting them if you are unsure about exact titles, OR use the get_trending_music tool to see what is currently popular and new!`;
   const userPrompt = `
 Recent: ${recentStr.substring(0, 500)}
 Disliked: ${dislikeStr.substring(0, 500)}
 Past: ${pastStr.substring(0, 500)}
 
-Recommend ${count} new tracks similar to Recent but exclude Disliked and Past.
+Recommend ${count} new tracks similar to Recent but exclude Disliked and Past. Mix in some brand new/trending tracks if they fit the user's taste!
 `;
 
   let messages = [
@@ -68,6 +84,18 @@ Recommend ${count} new tracks similar to Recent but exclude Disliked and Past.
             }
           },
           required: ["query"]
+        }
+      }
+    },
+    {
+      type: "function",
+      function: {
+        name: "get_trending_music",
+        description: "Get the current top trending and newest tracks globally. Use this to discover brand new music to recommend.",
+        parameters: {
+          type: "object",
+          properties: {},
+          required: []
         }
       }
     }
@@ -103,15 +131,14 @@ Recommend ${count} new tracks similar to Recent but exclude Disliked and Past.
         // Handle tool calls
         for (const toolCall of message.tool_calls) {
           if (toolCall.function.name === 'search_music_database') {
-            const args = JSON.parse(toolCall.function.arguments);
+            const args = JSON.parse(toolCall.function.arguments || '{}');
             console.log(`AI called search_music_database with query: ${args.query}`);
             const searchResults = await searchITunes(args.query);
-            
-            messages.push({
-              role: 'tool',
-              tool_call_id: toolCall.id,
-              content: JSON.stringify(searchResults)
-            });
+            messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(searchResults) });
+          } else if (toolCall.function.name === 'get_trending_music') {
+            console.log(`AI called get_trending_music`);
+            const trendingResults = await getTrendingMusic();
+            messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(trendingResults) });
           }
         }
         // Continue loop to send tool results back to AI
