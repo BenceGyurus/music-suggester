@@ -48,8 +48,8 @@ describe('Navidrome Service', () => {
       data: {
         'subsonic-response': {
           status: 'ok',
-          recentlyPlayed: {
-            track: [
+          playQueue: {
+            entry: [
               { artist: 'Artist A', title: 'Song A' },
               { artist: 'Artist A', title: 'Song B' }
             ]
@@ -61,7 +61,7 @@ describe('Navidrome Service', () => {
     const listens = await getAllRecentListens();
     expect(listens.length).toBe(2);
     expect(listens[0].title).toBe('Song A');
-    expect(axios.get).toHaveBeenCalledWith('http://navi1/rest/getRecentlyPlayed', expect.any(Object));
+    expect(axios.get).toHaveBeenCalledWith('http://navi1/rest/getPlayQueue', expect.any(Object));
   });
 
   it('should deduplicate tracks', async () => {
@@ -74,8 +74,8 @@ describe('Navidrome Service', () => {
       data: {
         'subsonic-response': {
           status: 'ok',
-          recentlyPlayed: {
-            track: [
+          playQueue: {
+            entry: [
               { artist: 'Artist A', title: 'Song A' }
             ]
           }

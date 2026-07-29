@@ -60,11 +60,11 @@ async function getRecentListensFromFiles() {
 }
 
 /**
- * Fetch recently played tracks for a specific Navidrome account
+ * Fetch recently played tracks for a specific Navidrome account using getPlayQueue
  */
 async function getRecentlyPlayedForAccount(account) {
   try {
-    let params = { u: account.username, v: '1.16.1', c: 'AutoMusicSuggester', f: 'json', size: 50 };
+    let params = { u: account.username, v: '1.16.1', c: 'AutoMusicSuggester', f: 'json' };
     if (account.salt) {
       params.t = generateSubsonicToken(account.password_or_token, account.salt);
       params.s = account.salt;
@@ -75,11 +75,13 @@ async function getRecentlyPlayedForAccount(account) {
     let baseUrl = account.url;
     if (!baseUrl.endsWith('/')) baseUrl += '/';
 
-    const response = await axios.get(`${baseUrl}rest/getRecentlyPlayed`, { params, timeout: 10000 });
+    const response = await axios.get(`${baseUrl}rest/getPlayQueue`, { params, timeout: 10000 });
     const data = response.data['subsonic-response'];
     if (data.status === 'ok') {
-      const tracks = data.recentlyPlayed?.track || [];
-      return tracks.map(t => ({ artist: t.artist, album: t.album, title: t.title }));
+      const tracks = data.playQueue?.entry || [];
+      // Take up to 50 tracks from the queue
+      const recentTracks = tracks.slice(0, 50);
+      return recentTracks.map(t => ({ artist: t.artist, album: t.album, title: t.title }));
     }
     return [];
   } catch (error) {
