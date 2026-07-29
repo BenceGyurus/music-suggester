@@ -88,17 +88,17 @@ function Settings() {
   };
 
   return (
-    <div className="animate-fade-in" style={{maxWidth: '800px', margin: '0 auto'}}>
-      <h1 style={{fontSize: '2rem', fontWeight: 'bold', marginBottom: '2rem'}}>Configuration</h1>
+    <div className="animate-fade-in" style={{maxWidth: '850px', margin: '0 auto'}}>
+      <h1 style={{fontSize: '2.2rem', fontWeight: '800', marginBottom: '2.5rem', letterSpacing: '-0.5px'}}>Configuration</h1>
       
       {msg && (
-        <div style={{padding: '1rem', background: 'rgba(46, 213, 115, 0.2)', color: 'var(--success-color)', borderRadius: '8px', marginBottom: '2rem'}}>
-          {msg}
+        <div style={{padding: '1.2rem', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success-color)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '12px', marginBottom: '2rem', display: 'flex', alignItems: 'center', gap: '10px'}}>
+          <Save size={18} /> {msg}
         </div>
       )}
 
-      <form onSubmit={saveSettings} className="glass-panel" style={{padding: '2rem', marginBottom: '3rem'}}>
-        <div className="settings-section">
+      <form onSubmit={saveSettings} className="glass-panel" style={{padding: '2.5rem', marginBottom: '3rem'}}>
+        <div className="settings-section" style={{marginBottom: 0, padding: 0}}>
           <h2>General Settings</h2>
           
           <div className="form-group">
@@ -161,54 +161,58 @@ function Settings() {
             />
           </div>
 
-          <div className="form-group">
-            <label>Max AI Recommendations per Batch</label>
-            <input 
-              type="number" 
-              name="max_recommendations" 
-              value={settings.max_recommendations || '5'} 
-              onChange={handleSettingChange} 
-              className="glass-input" 
-              min="1"
-              max="50"
-            />
-          </div>
-
-          <div className="form-group">
-            <label>Auto-queue Downloads</label>
-            <select 
-              name="auto_download" 
-              value={settings.auto_download || 'true'} 
-              onChange={handleSettingChange}
-              className="glass-input"
-            >
-              <option value="true">Yes</option>
-              <option value="false">No</option>
-            </select>
+          <div className="form-group" style={{ display: 'flex', gap: '1.5rem' }}>
+            <div style={{ flex: 1 }}>
+              <label>Max AI Recommendations</label>
+              <input 
+                type="number" 
+                name="max_recommendations" 
+                value={settings.max_recommendations || '5'} 
+                onChange={handleSettingChange} 
+                className="glass-input" 
+                min="1"
+                max="50"
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label>Auto-queue Downloads</label>
+              <select 
+                name="auto_download" 
+                value={settings.auto_download || 'true'} 
+                onChange={handleSettingChange}
+                className="glass-input"
+              >
+                <option value="true">Yes</option>
+                <option value="false">No</option>
+              </select>
+            </div>
           </div>
         </div>
         
-        <button type="submit" className="glass-button" disabled={saving}>
-          <Save size={18} /> {saving ? 'Saving...' : 'Save Settings'}
-        </button>
+        <div style={{ marginTop: '2.5rem', display: 'flex', justifyContent: 'flex-end' }}>
+          <button type="submit" className={`glass-button primary ${saving ? 'btn-pulse' : ''}`} disabled={saving}>
+            <Save size={18} /> {saving ? 'Saving...' : 'Save Settings'}
+          </button>
+        </div>
       </form>
 
-      <div className="glass-panel" style={{padding: '2rem'}}>
-        <div className="settings-section">
+      <div className="glass-panel" style={{padding: '2.5rem', marginBottom: '3rem'}}>
+        <div className="settings-section" style={{marginBottom: 0, padding: 0}}>
           <h2>Navidrome Accounts</h2>
-          <p style={{color: 'var(--text-secondary)', marginBottom: '1.5rem'}}>
+          <p style={{color: 'var(--text-secondary)', marginBottom: '2rem'}}>
             Add multiple accounts to fetch recently played tracks from different users.
           </p>
           
-          <div style={{marginBottom: '2rem'}}>
+          <div style={{marginBottom: '2.5rem'}}>
             {accounts.length === 0 ? (
-              <p style={{color: 'var(--text-secondary)', fontStyle: 'italic'}}>No accounts added yet.</p>
+              <p style={{color: 'var(--text-muted)', fontStyle: 'italic', padding: '1.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: '12px', textAlign: 'center'}}>No accounts added yet.</p>
             ) : (
-              <ul style={{listStyle: 'none', padding: 0}}>
+              <ul style={{listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: '1rem'}}>
                 {accounts.map(acc => (
-                  <li key={acc.id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', background: 'rgba(0,0,0,0.2)', borderRadius: '8px', marginBottom: '0.5rem'}}>
+                  <li key={acc.id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.2rem 1.5rem', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)', borderRadius: '12px', transition: 'var(--transition)'}}>
                     <div>
-                      <strong>{acc.username}</strong> @ {acc.url}
+                      <strong style={{fontSize: '1.1rem'}}>{acc.username}</strong> 
+                      <span style={{color: 'var(--text-muted)', marginLeft: '8px'}}>@ {acc.url}</span>
                     </div>
                     <button onClick={() => removeAccount(acc.id)} className="glass-button danger" style={{padding: '8px 12px'}}>
                       <Trash2 size={16} />
@@ -219,7 +223,7 @@ function Settings() {
             )}
           </div>
 
-          <form onSubmit={addAccount} style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', background: 'rgba(255,255,255,0.02)', padding: '1.5rem', borderRadius: '8px'}}>
+          <form onSubmit={addAccount} style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', background: 'rgba(0,0,0,0.2)', padding: '2rem', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)'}}>
             <div className="form-group" style={{marginBottom: 0}}>
               <label>Navidrome URL</label>
               <input type="text" value={newAccount.url} onChange={e => setNewAccount({...newAccount, url: e.target.value})} className="glass-input" required placeholder="https://music.example.com" />
@@ -233,10 +237,10 @@ function Settings() {
               <input type="password" value={newAccount.password_or_token} onChange={e => setNewAccount({...newAccount, password_or_token: e.target.value})} className="glass-input" required />
             </div>
             <div className="form-group" style={{marginBottom: 0}}>
-              <label>Salt (Optional if using plaintext password)</label>
-              <input type="text" value={newAccount.salt} onChange={e => setNewAccount({...newAccount, salt: e.target.value})} className="glass-input" />
+              <label>Salt (Optional)</label>
+              <input type="text" value={newAccount.salt} onChange={e => setNewAccount({...newAccount, salt: e.target.value})} className="glass-input" placeholder="For plaintext leave empty" />
             </div>
-            <div style={{gridColumn: '1 / -1', marginTop: '1rem'}}>
+            <div style={{gridColumn: '1 / -1', marginTop: '0.5rem', display: 'flex', justifyContent: 'flex-end'}}>
               <button type="submit" className="glass-button">
                 <Plus size={18} /> Add Account
               </button>

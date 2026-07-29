@@ -67,17 +67,25 @@ function Dashboard() {
   };
 
   if (loading) {
-    return <div style={{textAlign: 'center', marginTop: '100px'}}>Loading recommendations...</div>;
+    return (
+      <div style={{textAlign: 'center', marginTop: '100px', display: 'flex', flexDirection: 'column', alignItems: 'center'}}>
+        <RefreshCw size={48} className="spinning" style={{ color: 'var(--accent-color)', marginBottom: '1rem' }} />
+        <h2 style={{ color: 'var(--text-secondary)' }}>Loading recommendations...</h2>
+      </div>
+    );
   }
 
   return (
     <div className="animate-fade-in">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-        <h1 style={{fontSize: '2rem', fontWeight: 'bold'}}>Recommended for You</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2.5rem' }}>
+        <div>
+          <h1 style={{fontSize: '2.2rem', fontWeight: '800', marginBottom: '0.5rem', letterSpacing: '-0.5px'}}>Recommended for You</h1>
+          <p style={{color: 'var(--text-secondary)'}}>AI-curated tracks based on your listening history.</p>
+        </div>
         <button 
           onClick={triggerSync} 
           disabled={syncing}
-          className="glass-button"
+          className={`glass-button primary ${syncing ? 'btn-pulse' : ''}`}
         >
           <RefreshCw size={18} className={syncing ? "spinning" : ""} />
           {syncing ? 'Generating...' : 'Refresh AI'}
@@ -85,9 +93,15 @@ function Dashboard() {
       </div>
 
       {recommendations.length === 0 ? (
-        <div className="glass-panel" style={{padding: '3rem', textAlign: 'center'}}>
-          <p style={{color: 'var(--text-secondary)', marginBottom: '1rem'}}>No recommendations available.</p>
-          <button className="glass-button" onClick={triggerSync}>Generate New Recommendations</button>
+        <div className="glass-panel" style={{padding: '5rem 3rem', textAlign: 'center'}}>
+          <div style={{ background: 'var(--glass-highlight)', width: '80px', height: '80px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.5rem auto' }}>
+            <AlertTriangle size={32} style={{ color: 'var(--text-secondary)' }} />
+          </div>
+          <h2 style={{marginBottom: '1rem', fontWeight: '600'}}>No recommendations available yet.</h2>
+          <p style={{color: 'var(--text-secondary)', maxWidth: '500px', margin: '0 auto 2rem auto', lineHeight: '1.6'}}>
+            It seems the AI hasn't found new tracks or is currently processing. Click the button below to force a sync.
+          </p>
+          <button className="glass-button primary" onClick={triggerSync}>Generate New Recommendations</button>
         </div>
       ) : (
         <div className="recommendations-grid">
@@ -123,7 +137,7 @@ function Dashboard() {
                     </button>
                   )}
                   {track.status === 'downloaded' && (
-                    <button className="glass-button" disabled style={{background: 'var(--success-color)', opacity: 0.9}}>
+                    <button className="glass-button" disabled style={{background: 'rgba(16, 185, 129, 0.2)', color: 'var(--success-color)', border: '1px solid rgba(16, 185, 129, 0.4)'}}>
                       <Check size={16} /> Downloaded
                     </button>
                   )}
@@ -138,14 +152,6 @@ function Dashboard() {
           ))}
         </div>
       )}
-      <style>{`
-        .spinning {
-          animation: spin 2s linear infinite;
-        }
-        @keyframes spin {
-          100% { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 }

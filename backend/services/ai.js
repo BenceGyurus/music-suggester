@@ -145,7 +145,7 @@ Recommend ${count} new tracks similar to Recent but exclude Disliked and Past. M
     }
   ];
 
-  let maxIterations = 3;
+  let maxIterations = 10;
   let finalContent = null;
 
   console.log(`Generating ${count} recommendations using model: ${aiModel}...`);
