@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  auto-music-suggester:
+    build: .
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./data:/app/backend/data
+      - ./music_mount:/music # Mock mount point for Navidrome library
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
