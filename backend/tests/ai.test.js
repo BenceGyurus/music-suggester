@@ -147,7 +147,7 @@ describe('AI Service', () => {
           id: 'call_456',
           function: {
             name: 'get_trending_music',
-            arguments: '{}'
+            arguments: JSON.stringify({ genre_id: 132, limit: 5 })
           }
         }
       ]
@@ -176,6 +176,6 @@ describe('AI Service', () => {
     const recs = await generateRecommendations(1);
     expect(recs.length).toBe(1);
     expect(recs[0].title).toBe('New Hit');
-    expect(axios.get).toHaveBeenCalledWith('https://api.deezer.com/chart/0/tracks', expect.any(Object));
+    expect(axios.get).toHaveBeenCalledWith('https://api.deezer.com/chart/132/tracks?limit=5', expect.any(Object));
   });
 });

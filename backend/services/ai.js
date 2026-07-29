@@ -19,12 +19,12 @@ async function searchITunes(term) {
   }
 }
 
-async function getTrendingMusic() {
+async function getTrendingMusic(genreId = 0, limit = 15) {
   try {
-    const url = 'https://api.deezer.com/chart/0/tracks';
+    const url = `https://api.deezer.com/chart/${genreId}/tracks?limit=${limit}`;
     const response = await axios.get(url, { timeout: 10000 });
     const results = response.data.data || [];
-    return results.slice(0, 15).map(r => ({
+    return results.map(r => ({
       artist: r.artist.name,
       title: r.title,
       album: r.album.title
@@ -91,10 +91,19 @@ Recommend ${count} new tracks similar to Recent but exclude Disliked and Past. M
       type: "function",
       function: {
         name: "get_trending_music",
-        description: "Get the current top trending and newest tracks globally. Use this to discover brand new music to recommend.",
+        description: "Get the current top trending and newest tracks globally or by specific genre. Use this to discover brand new music to recommend.",
         parameters: {
           type: "object",
-          properties: {},
+          properties: {
+            genre_id: {
+              type: "integer",
+              description: "Optional Deezer genre ID. Use 0 for All/Global, 132 for Pop, 116 for Rap/Hip Hop, 152 for Rock, 113 for Dance, 165 for R&B, 85 for Alternative, 106 for Electro, 129 for Jazz, 98 for Classical. Default is 0."
+            },
+            limit: {
+              type: "integer",
+              description: "Optional number of tracks to fetch. Default is 15."
+            }
+          },
           required: []
         }
       }
@@ -136,8 +145,11 @@ Recommend ${count} new tracks similar to Recent but exclude Disliked and Past. M
             const searchResults = await searchITunes(args.query);
             messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(searchResults) });
           } else if (toolCall.function.name === 'get_trending_music') {
-            console.log(`AI called get_trending_music`);
-            const trendingResults = await getTrendingMusic();
+            const args = JSON.parse(toolCall.function.arguments || '{}');
+            const genreId = args.genre_id !== undefined ? args.genre_id : 0;
+            const limit = args.limit !== undefined ? args.limit : 15;
+            console.log(`AI called get_trending_music with genre_id: ${genreId}, limit: ${limit}`);
+            const trendingResults = await getTrendingMusic(genreId, limit);
             messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(trendingResults) });
           }
         }
