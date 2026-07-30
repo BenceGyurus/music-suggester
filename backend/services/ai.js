@@ -186,6 +186,26 @@ async function getGenreSummary(tracks) {
 }
 
 /**
+ * Summarize top artists based on track frequency
+ */
+function getArtistSummary(tracks) {
+  if (!tracks || tracks.length === 0) return 'None';
+  
+  const artists = {};
+  for (const track of tracks) {
+    if (track.artist && track.artist.trim() !== '' && track.artist !== 'Unknown') {
+      artists[track.artist] = (artists[track.artist] || 0) + (track.playCount || 1);
+    }
+  }
+  
+  const sortedArtists = Object.entries(artists).sort((a, b) => b[1] - a[1]);
+  if (sortedArtists.length === 0) return 'None';
+  
+  // Return top 15 artists
+  return sortedArtists.slice(0, 15).map(([a, count]) => `${a} (${count} plays/tracks)`).join(', ');
+}
+
+/**
  * Generate AI music recommendations via OpenRouter.
  */
 async function generateRecommendations(account = null) {
@@ -217,9 +237,10 @@ async function generateRecommendations(account = null) {
   const smallDislikes = (dislikes || []).slice(0, 30);
   const smallPastRecs = (pastRecommendations || []).slice(0, 30);
 
-  // Fetch genre summary
+  // Fetch genre and artist summaries
   console.log('Fetching genre summaries for top tracks...');
   const topGenreSummary = await getGenreSummary(stats.topAllTime);
+  const topArtistSummary = getArtistSummary([...(stats.recent || []), ...(stats.starred || []), ...(stats.topAllTime || [])]);
 
   // Group dislikes to find blacklisted artists
   const dislikeCounts = {};
@@ -320,6 +341,7 @@ RECENTLY PLAYED: ${recentStr}
 STARRED/FAVORITE TRACKS: ${starredStr}
 TOP ALL-TIME TRACKS: ${topStr}
 TOP GENRES (Based on iTunes Analysis): ${topGenreSummary}
+TOP ARTISTS (Overall summary): ${topArtistSummary}
 DISLIKED TRACKS (Do NOT recommend these or similar): ${dislikeStr}
 BLACKLISTED ARTISTS (NEVER recommend these): ${blacklistStr}
 PREVIOUSLY RECOMMENDED: ${pastStr}
