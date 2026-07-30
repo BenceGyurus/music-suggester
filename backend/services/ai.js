@@ -308,8 +308,9 @@ Based on the User's Profile (history, dislikes, and explicit instructions/mood) 
 Rules:
 1. Do not recommend artists the user has blacklisted or disliked.
 2. Ensure tracks match the user's mood if specified.
-3. Output MUST be ONLY a raw JSON array of objects with "title", "artist", and "album" keys. Do not output anything else.
-4. You must strictly follow this exact JSON format:
+3. CRITICAL: ONLY recommend real, existing tracks. Do NOT invent or hallucinate song titles. It is highly recommended to select tracks directly from the RESEARCH RESULTS.
+4. Output MUST be ONLY a raw JSON array of objects with "title", "artist", and "album" keys. Do not output anything else.
+5. You must strictly follow this exact JSON format:
 {
   "tracks": [
     { "title": "Track Name", "artist": "Artist Name", "album": "Album Name" },
@@ -324,7 +325,8 @@ ${historyContext}
 RESEARCH RESULTS (Use this to find new recommendations):
 ${gatheredData.join('\n\n')}
 
-Recommend ${count} new tracks based on the profile and research results. 
+Recommend ${count} REAL tracks based on the profile and research results. 
+CRITICAL: Do NOT invent songs! We will verify if they exist.
 CRITICAL: You must STRICTLY EXCLUDE the exact tracks listed in 'Disliked' and 'Previously Downloaded'.
 Output strictly the JSON object!`;
 
@@ -351,13 +353,35 @@ Output strictly the JSON object!`;
       throw new Error('AI returned an empty tracks array.');
     }
 
-    finalTracks = parsed;
+    // --- Validation Step: Filter out hallucinations ---
+    console.log('Validating generated tracks against iTunes database...');
+    const validatedTracks = [];
+    for (const track of parsed) {
+      if (!track.title || !track.artist) continue;
+      
+      const validation = await getTrackInfo(track.artist, track.title);
+      if (validation && !validation.error) {
+        validatedTracks.push({
+          title: validation.title,
+          artist: validation.artist,
+          album: validation.album || track.album
+        });
+      } else {
+        console.warn(`Discarding hallucinated/unverifiable track: ${track.artist} - ${track.title}`);
+      }
+    }
+
+    if (validatedTracks.length === 0) {
+       throw new Error('All generated tracks failed validation (hallucinations).');
+    }
+
+    finalTracks = validatedTracks;
   } catch (err) {
     console.error('Phase 3 failed:', err.message);
-    throw new Error('Failed to generate recommendations after multiple attempts.');
+    throw new Error('Failed to generate real recommendations after multiple attempts.');
   }
 
-  console.log(`Successfully generated ${finalTracks.length} recommendations.`);
+  console.log(`Successfully generated and validated ${finalTracks.length} recommendations.`);
   return finalTracks.slice(0, count);
 }
 

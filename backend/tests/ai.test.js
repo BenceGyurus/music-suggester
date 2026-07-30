@@ -11,8 +11,26 @@ jest.mock('../database', () => ({
 }));
 
 describe('AI Service', () => {
+  let mockGet;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGet = jest.spyOn(axios, 'get').mockImplementation((url) => {
+      if (url.includes('itunes.apple.com/search') && url.includes('limit=1')) {
+        let requestedTitle = 'Test Track';
+        const decoded = decodeURIComponent(url);
+        if (decoded.includes('Get Lucky')) requestedTitle = 'Get Lucky';
+        else if (decoded.includes('Underground Track')) requestedTitle = 'Underground Track';
+        else if (decoded.includes('Fallback Track')) requestedTitle = 'Fallback Track';
+
+        return Promise.resolve({
+          data: {
+            results: [{ artistName: 'Test Artist', trackName: requestedTitle, collectionName: 'Album' }]
+          }
+        });
+      }
+      return Promise.resolve({ data: { results: [], data: [] } });
+    });
   });
 
   it('should throw an error if OpenRouter key is not set', async () => {
@@ -61,7 +79,7 @@ describe('AI Service', () => {
     expect(recs.length).toBe(1);
     expect(recs[0].title).toBe('Get Lucky');
     expect(axios.post).toHaveBeenCalledTimes(2); // Phase 1 & Phase 3
-    expect(axios.get).toHaveBeenCalledTimes(1); // iTunes search
+    expect(axios.get).toHaveBeenCalledTimes(2); // iTunes search (Phase 2) + validation (Phase 3)
   });
 
   it('should handle similar artist commands in Phase 2', async () => {
@@ -109,8 +127,8 @@ describe('AI Service', () => {
     expect(recs.length).toBe(1);
     expect(recs[0].title).toBe('Underground Track');
     
-    // 2 GET requests: one for finding artist ID, one for finding similar artists
-    expect(axios.get).toHaveBeenCalledTimes(2);
+    // 3 GET requests: one for finding artist ID, one for finding similar artists, one for validation
+    expect(axios.get).toHaveBeenCalledTimes(3);
     expect(axios.get).toHaveBeenCalledWith('https://api.deezer.com/search/artist?q=Daft%20Punk&limit=1', expect.any(Object));
   });
 
