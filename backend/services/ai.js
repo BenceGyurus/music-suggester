@@ -186,13 +186,14 @@ async function generateRecommendations(count = 5) {
   const pastStr = smallPastRecs.map(p => `${p.artist}-${p.title}`).join('; ');
 
   // Helper to reliably call AI and parse JSON
-  async function callAIWithRetry(sysPrompt, usrPrompt, maxTries = 3) {
+  async function callAIWithRetry(sysPrompt, usrPrompt, maxTries = 3, temperature = 0.5) {
     for (let i = 0; i < maxTries; i++) {
       try {
         const response = await axios.post(
           'https://openrouter.ai/api/v1/chat/completions',
           {
             model: aiModel,
+            temperature: temperature,
             messages: [
               { role: 'system', content: sysPrompt },
               { role: 'user', content: usrPrompt }
@@ -215,8 +216,16 @@ async function generateRecommendations(count = 5) {
         let text = response.data.choices[0].message.content || '';
         let cleanText = text.replace(/```(?:json)?\s*([\s\S]*?)\s*```/g, '$1').trim();
         
-        // Find the first `{` to parse JSON
-        const startIndex = cleanText.indexOf('{');
+        // Find the first `{` or `[` to parse JSON
+        const objStart = cleanText.indexOf('{');
+        const arrStart = cleanText.indexOf('[');
+        let startIndex = -1;
+        if (objStart !== -1 && arrStart !== -1) {
+          startIndex = Math.min(objStart, arrStart);
+        } else {
+          startIndex = Math.max(objStart, arrStart);
+        }
+
         if (startIndex !== -1) {
           cleanText = cleanText.substring(startIndex);
         }
@@ -271,73 +280,98 @@ Example Output:
     commands = [{ action: 'trending', genre_id: 0 }];
   }
 
-  // --- PHASE 2: Execution (Data Gathering) ---
+  // --- PHASE 2: Execution (Candidate Generation) ---
   console.log(`[Phase 2] Executing ${commands.length} research commands...`);
-  let gatheredData = [];
+  const candidateMap = new Map(); // artist-title -> track object
 
-  for (const cmd of commands.slice(0, 4)) { // max 4 commands to prevent spam
+  const addCandidate = (track, feature) => {
+    if (!track.title || !track.artist) return;
+    const key = `${track.artist}-${track.title}`;
+    if (!candidateMap.has(key)) {
+      candidateMap.set(key, { ...track, features: [feature] });
+    } else {
+      const existing = candidateMap.get(key);
+      if (!existing.features.includes(feature)) {
+        existing.features.push(feature);
+      }
+    }
+  };
+
+  let researchContext = ""; // Still keep some context for the LLM
+
+  for (const cmd of commands.slice(0, 4)) {
     try {
       if (cmd.action === 'search' && cmd.query) {
         console.log(`Executing search for: ${cmd.query}`);
         const res = await searchMusicDatabase(cmd.query, 'itunes');
-        gatheredData.push(`Search results for '${cmd.query}': ${JSON.stringify(res.slice(0, 5))}`);
+        res.slice(0, 10).forEach(t => addCandidate(t, 'source_search'));
       } else if (cmd.action === 'analyze_artist' && cmd.artist) {
         console.log(`Executing analyze_artist for: ${cmd.artist}`);
         const res = await getArtistInfo(cmd.artist);
-        gatheredData.push(`Artist Info for '${cmd.artist}': ${JSON.stringify(res)}`);
+        researchContext += `Artist Info for '${cmd.artist}': ${JSON.stringify(res)}\n`;
+        // Top tracks from analyze_artist aren't full track objects easily, so we skip adding to candidates directly
       } else if (cmd.action === 'similar' && cmd.artist) {
         console.log(`Executing similar artists for: ${cmd.artist}`);
         const res = await discoverSimilarArtists(cmd.artist);
-        gatheredData.push(`Artists similar to '${cmd.artist}': ${JSON.stringify(res.slice(0, 5))}`);
+        researchContext += `Artists similar to '${cmd.artist}': ${JSON.stringify(res.slice(0, 5))}\n`;
+        // To get tracks, we'd need to search for these similar artists. 
+        // For now, let's just use them as context, OR search for the top 1 similar artist's tracks.
+        if (res.length > 0) {
+           const topSimilar = await searchMusicDatabase(res[0].artist, 'itunes');
+           topSimilar.slice(0, 5).forEach(t => addCandidate(t, 'source_similar'));
+        }
       } else if (cmd.action === 'trending') {
         const gid = cmd.genre_id || 0;
         console.log(`Executing trending for genre: ${gid}`);
-        const res = await getTrendingMusic(gid, 5, null);
-        gatheredData.push(`Trending tracks (genre ${gid}): ${JSON.stringify(res.slice(0, 5))}`);
+        const res = await getTrendingMusic(gid, 10, null);
+        res.slice(0, 10).forEach(t => addCandidate(t, 'source_trending'));
       }
     } catch (e) {
       console.error(`Command ${cmd.action} failed:`, e.message);
     }
   }
 
-  // --- PHASE 3: Final Generation ---
-  console.log(`[Phase 3] Generating final ${count} recommendations...`);
+  const candidates = Array.from(candidateMap.values());
+  if (candidates.length === 0) {
+    throw new Error('No candidate tracks found during Phase 2.');
+  }
+
+  // --- PHASE 3: LLM Feature Extraction & Mathematical Scoring ---
+  console.log(`[Phase 3] Scoring ${candidates.length} candidates using LLM and Weights...`);
   
-  const generationSystemPrompt = `You are a professional Music Recommender.
-Based on the User's Profile (history, dislikes, and explicit instructions/mood) AND the Research Data provided, generate exactly ${count} music recommendations.
-Rules:
-1. Do not recommend artists the user has blacklisted or disliked.
-2. Ensure tracks match the user's mood if specified.
-3. CRITICAL: ONLY recommend real, existing tracks. Do NOT invent or hallucinate song titles. It is highly recommended to select tracks directly from the RESEARCH RESULTS.
-4. Output MUST be ONLY a raw JSON array of objects with "title", "artist", and "album" keys. Do not output anything else.
-5. You must strictly follow this exact JSON format:
-{
-  "tracks": [
-    { "title": "Track Name", "artist": "Artist Name", "album": "Album Name" },
-    { "title": "Track Name 2", "artist": "Artist Name 2", "album": "Album Name 2" }
-  ]
-}`;
+  const generationSystemPrompt = `You are a professional Music Evaluator.
+Your job is to rate a provided list of candidate tracks based on the User's Profile (history, dislikes, and explicit instructions/mood).
+For EACH track in the list, you must provide two scores from 0 to 10:
+- "mood_match": How well does it fit the user's explicitly requested mood? (0 if unknown/no match, 10 if perfect)
+- "profile_match": How well does it fit their general listening history? (0 if completely opposite, 10 if perfect match)
+
+Output MUST be ONLY a raw JSON array of objects mapping the EXACT title and artist to their scores.
+Format:
+[
+  { "title": "Track Name", "artist": "Artist Name", "mood_match": 8, "profile_match": 9 }
+]`;
+
+  const candidateString = candidates.map(c => `- ${c.artist} - ${c.title}`).join('\n');
 
   const generationUserPrompt = `
 USER PROFILE / HISTORY:
 ${historyContext}
+ADDITIONAL RESEARCH CONTEXT:
+${researchContext}
 
-RESEARCH RESULTS (Use this to find new recommendations):
-${gatheredData.join('\n\n')}
+CANDIDATES TO RATE:
+${candidateString}
 
-Recommend ${count} REAL tracks based on the profile and research results. 
-CRITICAL: Do NOT invent songs! We will verify if they exist.
-CRITICAL: You must STRICTLY EXCLUDE the exact tracks listed in 'Disliked' and 'Previously Downloaded'.
-Output strictly the JSON object!`;
+Rate ALL candidates above.
+CRITICAL: You must strictly output the JSON array. Do not invent tracks. Only rate the ones listed.`;
 
-  let finalTracks = [];
+  let llmScores = [];
   try {
-    const finalResult = await callAIWithRetry(generationSystemPrompt, generationUserPrompt, 5);
-    let parsed = finalResult;
+    const finalResult = await callAIWithRetry(generationSystemPrompt, generationUserPrompt, 3, 0.2);
     
-    if (!Array.isArray(parsed) && parsed.tracks) {
-      parsed = parsed.tracks;
-    } else if (!Array.isArray(parsed)) {
+    let parsed = finalResult;
+    if (!Array.isArray(parsed) && parsed.tracks) parsed = parsed.tracks;
+    else if (!Array.isArray(parsed)) {
       for (const key in parsed) {
         if (Array.isArray(parsed[key])) {
             parsed = parsed[key];
@@ -346,43 +380,52 @@ Output strictly the JSON object!`;
       }
     }
     
-    if (!Array.isArray(parsed)) {
-      throw new Error('AI did not return a valid tracks array.');
+    if (Array.isArray(parsed)) {
+      llmScores = parsed;
     }
-    if (parsed.length === 0) {
-      throw new Error('AI returned an empty tracks array.');
-    }
-
-    // --- Validation Step: Filter out hallucinations ---
-    console.log('Validating generated tracks against iTunes database...');
-    const validatedTracks = [];
-    for (const track of parsed) {
-      if (!track.title || !track.artist) continue;
-      
-      const validation = await getTrackInfo(track.artist, track.title);
-      if (validation && !validation.error) {
-        validatedTracks.push({
-          title: validation.title,
-          artist: validation.artist,
-          album: validation.album || track.album
-        });
-      } else {
-        console.warn(`Discarding hallucinated/unverifiable track: ${track.artist} - ${track.title}`);
-      }
-    }
-
-    if (validatedTracks.length === 0) {
-       throw new Error('All generated tracks failed validation (hallucinations).');
-    }
-
-    finalTracks = validatedTracks;
   } catch (err) {
-    console.error('Phase 3 failed:', err.message);
-    throw new Error('Failed to generate real recommendations after multiple attempts.');
+    console.error('Phase 3 LLM scoring failed:', err.message);
+    // If LLM fails, we will still use the mathematical weights (LLM scores will default to 0)
   }
 
-  console.log(`Successfully generated and validated ${finalTracks.length} recommendations.`);
-  return finalTracks.slice(0, count);
+  // Fetch weights
+  const { getWeights } = require('../database');
+  const weights = await getWeights();
+  const minScoreThreshold = parseFloat(await getSetting('min_download_score', '25'));
+
+  // Calculate final scores
+  const finalTracks = [];
+  for (const track of candidates) {
+    let score = 0;
+    
+    // 1. Source Features
+    for (const feature of track.features) {
+      score += (weights[feature] || 0);
+    }
+    
+    // 2. LLM Features
+    const llmRating = llmScores.find(s => s.title === track.title && s.artist === track.artist) || { mood_match: 0, profile_match: 0 };
+    const moodVal = parseFloat(llmRating.mood_match) || 0;
+    const profileVal = parseFloat(llmRating.profile_match) || 0;
+    
+    track.features.push(`llm_mood_match_${moodVal}`);
+    track.features.push(`llm_profile_match_${profileVal}`);
+    
+    score += (moodVal * (weights['llm_mood_match'] || 0));
+    score += (profileVal * (weights['llm_profile_match'] || 0));
+
+    track.finalScore = score;
+    
+    if (score >= minScoreThreshold) {
+      finalTracks.push(track);
+    }
+  }
+
+  // Sort by highest score
+  finalTracks.sort((a, b) => b.finalScore - a.finalScore);
+
+  console.log(`Successfully scored tracks. ${finalTracks.length} tracks met the threshold of ${minScoreThreshold}.`);
+  return finalTracks;
 }
 
 module.exports = {

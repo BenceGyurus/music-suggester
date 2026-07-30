@@ -163,15 +163,15 @@ function Settings() {
 
           <div className="form-group" style={{ display: 'flex', gap: '1.5rem' }}>
             <div style={{ flex: 1 }}>
-              <label>Max AI Recommendations</label>
+              <label>Min Download Score (Threshold)</label>
               <input 
                 type="number" 
-                name="max_recommendations" 
-                value={settings.max_recommendations || '5'} 
+                name="min_download_score" 
+                value={settings.min_download_score || '25'} 
                 onChange={handleSettingChange} 
                 className="glass-input" 
-                min="1"
-                max="50"
+                min="0"
+                max="100"
               />
             </div>
             <div style={{ flex: 1 }}>

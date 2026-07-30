@@ -37,10 +37,32 @@ async function runRecommendationJob() {
             console.error('Failed to fetch cover art for', artist, title);
           }
 
-          await dbRun(
+          const result = await dbRun(
             'INSERT INTO history (title, artist, album, status, image_url) VALUES (?, ?, ?, ?, ?)',
             [title, artist, album, 'recommended', imageUrl]
           );
+
+          if (rec.features && Array.isArray(rec.features)) {
+            const { getWeights } = require('../database');
+            const weights = await getWeights();
+
+            for (const featureStr of rec.features) {
+              let featureName = featureStr;
+              let featureValue = 1.0;
+              
+              if (featureStr.startsWith('llm_')) {
+                const parts = featureStr.split('_');
+                featureValue = parseFloat(parts.pop());
+                featureName = parts.join('_');
+              }
+              
+              const currentWeight = weights[featureName] || 0;
+              await dbRun(
+                'INSERT INTO recommendation_features (history_id, feature, value, weight_at_time) VALUES (?, ?, ?, ?)',
+                [result.id, featureName, featureValue, currentWeight]
+              );
+            }
+          }
         }
       }
     }

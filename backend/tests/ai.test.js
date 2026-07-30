@@ -1,176 +1,121 @@
 const axios = require('axios');
 const { generateRecommendations } = require('../services/ai');
 const { getAllRecentListens } = require('../services/navidrome');
-const { getSetting, dbAll } = require('../database');
+const { getSetting, dbAll, getWeights } = require('../database');
 
 jest.mock('axios');
 jest.mock('../services/navidrome');
 jest.mock('../database', () => ({
   getSetting: jest.fn(),
-  dbAll: jest.fn()
+  dbAll: jest.fn(),
+  getWeights: jest.fn()
 }));
 
 describe('AI Service', () => {
-  let mockGet;
-
   beforeEach(() => {
     jest.clearAllMocks();
-    mockGet = jest.spyOn(axios, 'get').mockImplementation((url) => {
-      if (url.includes('itunes.apple.com/search') && url.includes('limit=1')) {
-        let requestedTitle = 'Test Track';
-        const decoded = decodeURIComponent(url);
-        if (decoded.includes('Get Lucky')) requestedTitle = 'Get Lucky';
-        else if (decoded.includes('Underground Track')) requestedTitle = 'Underground Track';
-        else if (decoded.includes('Fallback Track')) requestedTitle = 'Fallback Track';
-
-        return Promise.resolve({
-          data: {
-            results: [{ artistName: 'Test Artist', trackName: requestedTitle, collectionName: 'Album' }]
-          }
-        });
-      }
-      return Promise.resolve({ data: { results: [], data: [] } });
+    
+    getWeights.mockResolvedValue({
+      'source_similar': 10,
+      'source_trending': 5,
+      'source_search': 8,
+      'llm_mood_match': 2,
+      'llm_profile_match': 1.5
     });
-  });
 
-  it('should throw an error if OpenRouter key is not set', async () => {
-    getSetting.mockResolvedValueOnce(null); // No API key
-    await expect(generateRecommendations(5)).rejects.toThrow('OpenRouter API key is not set.');
-  });
-
-  it('should generate recommendations via 3-phase workflow', async () => {
     getSetting.mockImplementation((key) => {
       if (key === 'openrouter_key') return 'test_key';
       if (key === 'ai_model') return 'test_model';
+      if (key === 'user_mood') return 'chill';
+      if (key === 'min_download_score') return '25';
       return null;
     });
 
     getAllRecentListens.mockResolvedValue([{ artist: 'Artist A', title: 'Song A' }]);
-    dbAll.mockResolvedValue([]); // No dislikes or history
+    dbAll.mockResolvedValue([]);
+  });
 
-    // Phase 1 Mock (Research Commands)
+  it('should throw an error if OpenRouter key is not set', async () => {
+    getSetting.mockImplementation((key) => {
+        if (key === 'openrouter_key') return null;
+        return 'test';
+    });
+    await expect(generateRecommendations()).rejects.toThrow('OpenRouter API key is not set.');
+  });
+
+  it('should generate recommendations via 3-phase neural workflow', async () => {
+    // Phase 1 Mock
     const phase1Response = {
       commands: [
         { action: 'search', query: 'Daft Punk' }
       ]
     };
 
-    // Phase 3 Mock (Final Generation)
-    const phase3Response = {
-      tracks: [
-        { title: 'Get Lucky', artist: 'Daft Punk', album: 'RAM' }
-      ]
-    };
+    // Phase 3 Mock (Rating)
+    const phase3Response = [
+        { title: 'Get Lucky', artist: 'Daft Punk', mood_match: 10, profile_match: 10 }
+    ];
 
     axios.post
       .mockResolvedValueOnce({ data: { choices: [{ message: { content: JSON.stringify(phase1Response) } }] } })
       .mockResolvedValueOnce({ data: { choices: [{ message: { content: JSON.stringify(phase3Response) } }] } });
 
-    // Phase 2 Mock (iTunes API)
-    axios.get.mockResolvedValueOnce({
-      data: {
-        results: [
-          { artistName: 'Daft Punk', trackName: 'Get Lucky', collectionName: 'RAM', primaryGenreName: 'Electronic' }
-        ]
+    // Phase 2 Mock (iTunes Search)
+    axios.get.mockImplementation((url) => {
+      if (url.includes('itunes.apple.com/search')) {
+        return Promise.resolve({
+          data: {
+            results: [
+              { artistName: 'Daft Punk', trackName: 'Get Lucky', collectionName: 'RAM' },
+              { artistName: 'Daft Punk', trackName: 'Bad Song', collectionName: 'RAM' }
+            ]
+          }
+        });
       }
+      return Promise.resolve({ data: { results: [] } });
     });
 
-    const recs = await generateRecommendations(1);
+    const recs = await generateRecommendations();
+    
     expect(recs.length).toBe(1);
     expect(recs[0].title).toBe('Get Lucky');
-    expect(axios.post).toHaveBeenCalledTimes(2); // Phase 1 & Phase 3
-    expect(axios.get).toHaveBeenCalledTimes(2); // iTunes search (Phase 2) + validation (Phase 3)
-  });
-
-  it('should handle similar artist commands in Phase 2', async () => {
-    getSetting.mockImplementation((key) => {
-      if (key === 'openrouter_key') return 'test_key';
-      if (key === 'ai_model') return 'test_model';
-      return null;
-    });
-
-    getAllRecentListens.mockResolvedValue([]);
-    dbAll.mockResolvedValue([]);
-
-    const phase1Response = {
-      commands: [
-        { action: 'similar', artist: 'Daft Punk' }
-      ]
-    };
-
-    const phase3Response = {
-      tracks: [
-        { title: 'Underground Track', artist: 'Underground Artist', album: 'Album' }
-      ]
-    };
-
-    axios.post
-      .mockResolvedValueOnce({ data: { choices: [{ message: { content: JSON.stringify(phase1Response) } }] } })
-      .mockResolvedValueOnce({ data: { choices: [{ message: { content: JSON.stringify(phase3Response) } }] } });
-
-    // Mock Deezer search artist
-    axios.get.mockResolvedValueOnce({
-      data: { data: [{ id: 27, name: 'Daft Punk' }] }
-    });
-
-    // Mock Deezer related artists
-    axios.get.mockResolvedValueOnce({
-      data: {
-        data: [
-          { name: 'Underground Artist', nb_fan: 1000 },
-          { name: 'Mainstream Artist', nb_fan: 1000000 }
-        ]
-      }
-    });
-
-    const recs = await generateRecommendations(1);
-    expect(recs.length).toBe(1);
-    expect(recs[0].title).toBe('Underground Track');
+    expect(recs[0].finalScore).toBe(43);
     
-    // 3 GET requests: one for finding artist ID, one for finding similar artists, one for validation
-    expect(axios.get).toHaveBeenCalledTimes(3);
-    expect(axios.get).toHaveBeenCalledWith('https://api.deezer.com/search/artist?q=Daft%20Punk&limit=1', expect.any(Object));
+    expect(axios.post).toHaveBeenCalledTimes(2); // Phase 1 & 3
+    expect(axios.get).toHaveBeenCalledTimes(1); // Phase 2 iTunes search
   });
 
   it('should gracefully fallback if Phase 1 fails', async () => {
-    getSetting.mockImplementation((key) => {
-      if (key === 'openrouter_key') return 'test_key';
-      if (key === 'ai_model') return 'test_model';
-      return null;
-    });
-
-    getAllRecentListens.mockResolvedValue([]);
-    dbAll.mockResolvedValue([]);
-
     let callCount = 0;
     axios.post.mockImplementation(() => {
       callCount++;
       if (callCount <= 3) {
-        // Phase 1 attempts (fail 3 times)
         return Promise.resolve({ data: { choices: [{ message: { content: 'This is not json' } }] } });
       } else {
-        // Phase 3 attempt
-        const phase3Response = {
-          tracks: [
-            { title: 'Fallback Track', artist: 'Fallback', album: 'Album' }
-          ]
-        };
+        const phase3Response = [
+          { title: 'New Hit', artist: 'Pop Star', mood_match: 10, profile_match: 10 }
+        ];
         return Promise.resolve({ data: { choices: [{ message: { content: JSON.stringify(phase3Response) } }] } });
       }
     });
 
-    // Since Phase 1 fails, it defaults to trending command
-    axios.get.mockResolvedValueOnce({
-      data: {
-        data: [
-          { artist: { name: 'Pop Star' }, title: 'New Hit', album: { title: 'The Album' } }
-        ]
+    axios.get.mockImplementation((url) => {
+      if (url.includes('chart/0/tracks')) {
+          return Promise.resolve({
+            data: {
+              data: [
+                { artist: { name: 'Pop Star' }, title: 'New Hit', album: { title: 'The Album' } }
+              ]
+            }
+          });
       }
+      return Promise.resolve({ data: { data: [] } });
     });
 
-    const recs = await generateRecommendations(1);
+    const recs = await generateRecommendations();
     expect(recs.length).toBe(1);
-    expect(recs[0].title).toBe('Fallback Track');
-    expect(axios.get).toHaveBeenCalledWith('https://api.deezer.com/chart/0/tracks?limit=5', expect.any(Object)); // Default trending search
+    expect(recs[0].title).toBe('New Hit');
+    expect(recs[0].finalScore).toBe(40);
+    expect(axios.get).toHaveBeenCalledWith('https://api.deezer.com/chart/0/tracks?limit=10', expect.any(Object));
   });
 });

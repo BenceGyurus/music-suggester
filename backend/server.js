@@ -120,8 +120,21 @@ app.post('/api/dislike', async (req, res) => {
     // Save to dislikes
     await dbRun('INSERT INTO dislikes (type, name, artist) VALUES (?, ?, ?)', [type, name, artist || null]);
     
-    // Remove from history if it's there
     if (id) {
+        // Backpropagation: Penalize weights that led to this bad recommendation
+        const { updateWeight } = require('./database');
+        const features = await dbAll('SELECT feature, value FROM recommendation_features WHERE history_id = ?', [id]);
+        
+        for (const f of features) {
+            // Apply a learning rate penalty
+            // We penalize the feature by -0.5 multiplied by its activation value
+            const penalty = -0.5 * f.value; 
+            await updateWeight(f.feature, penalty);
+            console.log(`[Backprop] Penalized ${f.feature} by ${penalty} due to dislike.`);
+        }
+
+        // Delete from features and history
+        await dbRun('DELETE FROM recommendation_features WHERE history_id = ?', [id]);
         await dbRun('DELETE FROM history WHERE id = ?', [id]);
     }
 

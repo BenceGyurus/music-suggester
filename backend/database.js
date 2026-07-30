@@ -55,6 +55,31 @@ function initDb() {
       artist TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
+
+    // Neural Weights
+    db.run(`CREATE TABLE IF NOT EXISTS weights (
+      feature TEXT PRIMARY KEY,
+      weight REAL NOT NULL
+    )`);
+
+    // Default Weights
+    db.run(`INSERT OR IGNORE INTO weights (feature, weight) VALUES 
+      ('source_similar', 10.0),
+      ('source_trending', 5.0),
+      ('source_search', 8.0),
+      ('llm_mood_match', 2.0),
+      ('llm_profile_match', 1.5)
+    `);
+
+    // Recommendation Features
+    db.run(`CREATE TABLE IF NOT EXISTS recommendation_features (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      history_id INTEGER NOT NULL,
+      feature TEXT NOT NULL,
+      value REAL NOT NULL,
+      weight_at_time REAL NOT NULL,
+      FOREIGN KEY(history_id) REFERENCES history(id)
+    )`);
   });
 }
 
@@ -86,7 +111,6 @@ const dbAll = (sql, params = []) => {
   });
 };
 
-// Settings helpers
 const getSetting = async (key, defaultValue = null) => {
   const row = await dbGet('SELECT value FROM settings WHERE key = ?', [key]);
   return row ? row.value : defaultValue;
@@ -96,11 +120,27 @@ const setSetting = async (key, value) => {
   await dbRun('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', [key, value]);
 };
 
+// Neural Weight helpers
+const getWeights = async () => {
+  const rows = await dbAll('SELECT feature, weight FROM weights');
+  const weights = {};
+  for (const row of rows) {
+    weights[row.feature] = row.weight;
+  }
+  return weights;
+};
+
+const updateWeight = async (feature, delta) => {
+  await dbRun('UPDATE weights SET weight = weight + ? WHERE feature = ?', [delta, feature]);
+};
+
 module.exports = {
   db,
   dbRun,
   dbGet,
   dbAll,
   getSetting,
-  setSetting
+  setSetting,
+  getWeights,
+  updateWeight
 };
