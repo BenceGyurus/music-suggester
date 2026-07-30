@@ -29,14 +29,25 @@ async function runRecommendationJob() {
       }
     }
     
-    // Deduplicate recommendations before saving
+    // Deduplicate recommendations before saving and enforce artist diversity
     const uniqueRecs = [];
     const seenRecs = new Set();
+    const artistCounts = {}; // Scope by account and artist
+
     for (const r of allRecommendations) {
       const key = `${r.artist}-${r.title}`;
+      const recAccountId = r._account ? r._account.id : 'global';
+      const artistKey = `${recAccountId}-${r.artist.toLowerCase()}`;
+
       if (!seenRecs.has(key)) {
-        seenRecs.add(key);
-        uniqueRecs.push(r);
+        const count = artistCounts[artistKey] || 0;
+        if (count < 2) {
+          artistCounts[artistKey] = count + 1;
+          seenRecs.add(key);
+          uniqueRecs.push(r);
+        } else {
+          console.log(`[Scheduler] Skipping track '${r.title}' by '${r.artist}' to maintain artist diversity.`);
+        }
       }
     }
 

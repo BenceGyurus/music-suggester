@@ -324,6 +324,7 @@ async function generateRecommendations(account = null) {
   
   const researchSystemPrompt = `You are a professional Music Researcher and Data Gatherer. Your job is to analyze the user's music history and decide what external searches you need to run to find good recommendations.
 You MUST output ONLY a raw JSON object with a "commands" array. Do not output conversational text.
+CRITICAL: You must ensure ARTIST DIVERSITY. If outputting multiple commands, target DIFFERENT artists. Do not fixate on a single artist!
 Allowed actions:
 - "search": Search a general query (e.g. a genre, mood, or song title). Requires "query" field. Do NOT use this for finding an artist's tracks.
 - "search_artist_tracks": Search for tracks specifically by a given artist. Requires "artist" field. Use this when you want to recommend songs from a specific artist.
