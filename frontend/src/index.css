@@ -187,19 +187,22 @@ body {
 /* Dashboard Grid */
 .recommendations-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 1rem;
 }
 
 /* Card Improvements */
 .track-card {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  padding: 0.75rem;
+  gap: 1rem;
   transition: var(--transition);
 }
 
 .track-card:hover {
-  transform: translateY(-4px);
+  transform: translateX(4px);
   border-color: #3f3f46;
 }
 
@@ -214,10 +217,11 @@ body {
 }
 
 .track-image-container {
-  width: 100%;
-  aspect-ratio: 1;
+  width: 90px;
+  height: 90px;
+  flex-shrink: 0;
   background: #111;
-  border-radius: var(--card-radius) var(--card-radius) 0 0;
+  border-radius: 8px;
   position: relative;
   overflow: hidden;
 }
@@ -230,7 +234,7 @@ body {
 }
 
 .track-card:hover .track-image {
-  transform: scale(1.02);
+  transform: scale(1.05);
 }
 
 .track-image-placeholder {
@@ -240,44 +244,49 @@ body {
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  font-size: 0.9rem;
+  font-size: 0.75rem;
   font-weight: 500;
   background: #18181b;
 }
 
 .track-info {
-  padding: 1rem;
   flex-grow: 1;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  background: var(--glass-bg);
+  justify-content: center;
+  min-width: 0; /* allows text truncation */
 }
 
 .track-title {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 700;
-  margin-bottom: 0.2rem;
+  margin-bottom: 0.1rem;
   color: var(--text-primary);
   line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .track-artist {
   color: var(--text-secondary);
   font-size: 0.9rem;
   font-weight: 400;
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.2rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .track-actions {
   display: flex;
   gap: 0.5rem;
-  margin-top: auto;
+  margin-top: 0.2rem;
 }
 
 .track-actions button {
   flex: 1;
-  padding: 0.5rem;
+  padding: 0.4rem;
   display: flex;
   justify-content: center;
   align-items: center;
