@@ -120,50 +120,120 @@ async function getFrequentAlbumsForAccount(account) {
 }
 
 /**
+ * Fetch starred/favorite tracks
+ */
+async function getStarredTracksForAccount(account) {
+  try {
+    let params = { u: account.username, v: '1.16.1', c: 'AutoMusicSuggester', f: 'json' };
+    if (account.salt) {
+      params.t = generateSubsonicToken(account.password_or_token, account.salt);
+      params.s = account.salt;
+    } else {
+      params.p = account.password_or_token;
+    }
+    let baseUrl = account.url;
+    if (!baseUrl.endsWith('/')) baseUrl += '/';
+
+    const response = await axios.get(`${baseUrl}rest/getStarred`, { params, timeout: 10000 });
+    const data = response.data['subsonic-response'];
+    if (data.status === 'ok') {
+      const tracks = data.starred?.song || [];
+      return tracks.slice(0, 50).map(t => ({ artist: t.artist, album: t.album, title: t.title }));
+    }
+    return [];
+  } catch (error) {
+    console.error(`Failed to fetch starred tracks from Navidrome ${account.url}:`, error.message);
+    return [];
+  }
+}
+
+/**
+ * Fetch top songs of all time
+ */
+async function getTopSongsForAccount(account) {
+  try {
+    let params = { u: account.username, v: '1.16.1', c: 'AutoMusicSuggester', f: 'json', count: 50 };
+    if (account.salt) {
+      params.t = generateSubsonicToken(account.password_or_token, account.salt);
+      params.s = account.salt;
+    } else {
+      params.p = account.password_or_token;
+    }
+    let baseUrl = account.url;
+    if (!baseUrl.endsWith('/')) baseUrl += '/';
+
+    const response = await axios.get(`${baseUrl}rest/getTopSongs`, { params, timeout: 10000 });
+    const data = response.data['subsonic-response'];
+    if (data.status === 'ok') {
+      const tracks = data.topSongs?.song || [];
+      return tracks.map(t => ({ artist: t.artist, album: t.album, title: t.title }));
+    }
+    return [];
+  } catch (error) {
+    console.error(`Failed to fetch top songs from Navidrome ${account.url}:`, error.message);
+    return [];
+  }
+}
+
+/**
  * Fetch recently played tracks across all configured Navidrome accounts
  */
 async function getAllRecentListens() {
   const accounts = await dbAll('SELECT * FROM navidrome_accounts');
-  let allListens = [];
+  
+  let recent = [];
+  let starred = [];
+  let topAllTime = [];
 
   if (accounts.length === 0) {
     // Fallback to reading file dates
-    allListens = await getRecentListensFromFiles();
+    recent = await getRecentListensFromFiles();
   } else {
     for (const account of accounts) {
       const listens = await getRecentlyPlayedForAccount(account);
       const frequents = await getFrequentAlbumsForAccount(account);
-      allListens.push(...listens);
-      allListens.push(...frequents);
+      recent.push(...listens, ...frequents);
+
+      const favs = await getStarredTracksForAccount(account);
+      starred.push(...favs);
+
+      const tops = await getTopSongsForAccount(account);
+      topAllTime.push(...tops);
     }
-    // If API requests failed or yielded 0 tracks, try falling back to files
-    if (allListens.length === 0) {
+    
+    if (recent.length === 0) {
       console.log('Navidrome API yielded 0 tracks (or failed). Falling back to local files...');
-      allListens = await getRecentListensFromFiles();
+      recent = await getRecentListensFromFiles();
     }
   }
 
-  // Group by artist and title, tracking play count
-  const listenMap = new Map();
+  // Deduplicate helper
+  const deduplicate = (arr) => {
+    const map = new Map();
+    for (const track of arr) {
+      const key = `${track.artist}-${track.title}`;
+      if (!map.has(key)) {
+        map.set(key, { ...track, playCount: 1 });
+      } else {
+        map.get(key).playCount += 1;
+      }
+    }
+    const res = Array.from(map.values());
+    res.sort((a, b) => b.playCount - a.playCount);
+    return res;
+  };
+
+  recent = deduplicate(recent).slice(0, 50);
+  starred = deduplicate(starred).slice(0, 50);
+  topAllTime = deduplicate(topAllTime).slice(0, 50);
+
+  console.log(`Aggregated stats from Navidrome: ${recent.length} recent, ${starred.length} starred, ${topAllTime.length} top all-time.`);
   
-  for (const listen of allListens) {
-    const key = `${listen.artist}-${listen.title}`;
-    if (!listenMap.has(key)) {
-      listenMap.set(key, { ...listen, playCount: 1 });
-    } else {
-      listenMap.get(key).playCount += 1;
-    }
-  }
-
-  // Convert to array and sort by playCount (descending)
-  const uniqueListens = Array.from(listenMap.values());
-  uniqueListens.sort((a, b) => b.playCount - a.playCount);
-
-  // We can trim this to the top 50 to avoid blowing up the prompt context
-  const topListens = uniqueListens.slice(0, 50);
-
-  console.log(`Aggregated ${topListens.length} top recent listens from Navidrome/Local files.`);
-  return topListens;
+  return {
+    recent,
+    starred,
+    topAllTime
+  };
 }
 
 module.exports = {

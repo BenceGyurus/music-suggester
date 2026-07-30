@@ -164,12 +164,15 @@ async function generateRecommendations(count = 5) {
   }
 
   // 1. Gather recent listens
-  const recentListens = await getAllRecentListens();
+  const stats = await getAllRecentListens();
   const dislikes = await dbAll('SELECT name, artist FROM dislikes');
   const pastRecommendations = await dbAll('SELECT title, artist FROM history ORDER BY recommended_at DESC LIMIT 100');
+  
   // Break into smaller context to prevent overwhelming small models
-  // Limit to 15 recent, 5 frequent, 10 past, 5 dislikes
-  const smallRecentListens = recentListens.slice(0, 20); // increased to 20 for better profile
+  const smallRecentListens = (stats.recent || []).slice(0, 20);
+  const smallStarred = (stats.starred || []).slice(0, 20);
+  const smallTop = (stats.topAllTime || []).slice(0, 20);
+  
   const smallDislikes = dislikes;
   const smallPastRecs = pastRecommendations.slice(0, 10);
 
@@ -182,6 +185,8 @@ async function generateRecommendations(count = 5) {
   const blacklistStr = blacklistedArtists.length > 0 ? blacklistedArtists.join(', ') : 'None';
 
   const recentStr = smallRecentListens.map(r => `${r.artist}-${r.title} (Plays: ${r.playCount || 1})`).join('; ');
+  const starredStr = smallStarred.map(r => `${r.artist}-${r.title}`).join('; ');
+  const topStr = smallTop.map(r => `${r.artist}-${r.title}`).join('; ');
   const dislikeStr = smallDislikes.slice(0, 10).map(d => `${d.artist}-${d.name}`).join('; ');
   const pastStr = smallPastRecs.map(p => `${p.artist}-${p.title}`).join('; ');
 
@@ -266,10 +271,16 @@ Example Output:
   historyContext += `Blacklisted Artists (DO NOT SEARCH FOR THEM): ${blacklistStr}\n`;
   
   if (smallRecentListens.length > 0) {
-    historyContext += `Recent Listens: ${recentStr}\nPreviously Downloaded: ${pastStr}\nDisliked: ${dislikeStr}`;
-  } else {
-    historyContext += `Previously Downloaded: ${pastStr}\nDisliked: ${dislikeStr}`;
+    historyContext += `Recent Listens: ${recentStr}\n`;
   }
+  if (smallStarred.length > 0) {
+    historyContext += `User's Favorites (Starred): ${starredStr}\n`;
+  }
+  if (smallTop.length > 0) {
+    historyContext += `All-Time Top Most Played: ${topStr}\n`;
+  }
+  
+  historyContext += `Previously Downloaded: ${pastStr}\nDisliked: ${dislikeStr}`;
 
   let commands = [];
   try {
@@ -398,6 +409,17 @@ CRITICAL: You must strictly output the JSON array. Do not invent tracks. Only ra
   for (const track of candidates) {
     let score = 0;
     
+    // Dynamically inject deep profile features
+    const isFavorite = smallStarred.some(fav => fav.artist.toLowerCase() === track.artist.toLowerCase());
+    if (isFavorite && !track.features.includes('source_favorite_artist')) {
+      track.features.push('source_favorite_artist');
+    }
+
+    const isTop = smallTop.some(top => top.artist.toLowerCase() === track.artist.toLowerCase());
+    if (isTop && !track.features.includes('source_top_artist')) {
+      track.features.push('source_top_artist');
+    }
+
     // 1. Source Features
     for (const feature of track.features) {
       score += (weights[feature] || 0);

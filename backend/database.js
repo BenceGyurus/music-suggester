@@ -67,6 +67,8 @@ function initDb() {
       ('source_similar', 10.0),
       ('source_trending', 5.0),
       ('source_search', 8.0),
+      ('source_favorite_artist', 15.0),
+      ('source_top_artist', 12.0),
       ('llm_mood_match', 2.0),
       ('llm_profile_match', 1.5)
     `);
