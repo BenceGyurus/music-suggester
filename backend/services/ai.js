@@ -169,12 +169,11 @@ async function generateRecommendations(count = 5) {
   const pastRecommendations = await dbAll('SELECT title, artist FROM history ORDER BY recommended_at DESC LIMIT 100');
   
   // Break into smaller context to prevent overwhelming small models
-  const smallRecentListens = (stats.recent || []).slice(0, 20);
-  const smallStarred = (stats.starred || []).slice(0, 20);
-  const smallTop = (stats.topAllTime || []).slice(0, 20);
-  
-  const smallDislikes = dislikes;
-  const smallPastRecs = pastRecommendations.slice(0, 10);
+  const smallRecentListens = (stats.recent || []).slice(0, 50);
+  const smallStarred = (stats.starred || []).slice(0, 50);
+  const smallTop = (stats.topAllTime || []).slice(0, 50);
+  const smallDislikes = (dislikes || []).slice(0, 30);
+  const smallPastRecs = (pastRecommendations || []).slice(0, 30);
 
   // Group dislikes to find blacklisted artists
   const dislikeCounts = {};
