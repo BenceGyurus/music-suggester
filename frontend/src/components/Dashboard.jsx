@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { X, Download, RefreshCw, Check, AlertTriangle } from 'lucide-react';
+import { X, Download, RefreshCw, Check, AlertTriangle, EyeOff, Eye } from 'lucide-react';
 
 const API_BASE = '/api';
 
@@ -8,6 +8,7 @@ function Dashboard() {
   const [recommendations, setRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
 
   const fetchRecommendations = async () => {
     try {
@@ -37,6 +38,15 @@ function Dashboard() {
         name: track.title,
         artist: track.artist
       });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleHide = async (trackId, hidden) => {
+    try {
+      setRecommendations(recommendations.map(r => r.id === trackId ? { ...r, hidden: hidden ? 1 : 0 } : r));
+      await axios.post(`${API_BASE}/recommendations/hide/${trackId}`, { hidden });
     } catch (err) {
       console.error(err);
     }
@@ -82,14 +92,24 @@ function Dashboard() {
           <h1 style={{fontSize: '2.2rem', fontWeight: '800', marginBottom: '0.5rem', letterSpacing: '-0.5px'}}>Recommended for You</h1>
           <p style={{color: 'var(--text-secondary)'}}>AI-curated tracks based on your listening history.</p>
         </div>
-        <button 
-          onClick={triggerSync} 
-          disabled={syncing}
-          className={`glass-button primary ${syncing ? 'btn-pulse' : ''}`}
-        >
-          <RefreshCw size={18} className={syncing ? "spinning" : ""} />
-          {syncing ? 'Generating...' : 'Refresh AI'}
-        </button>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button 
+            onClick={() => setShowHidden(!showHidden)} 
+            className={`glass-button`}
+            style={{ padding: '0.5rem 1rem' }}
+          >
+            {showHidden ? <EyeOff size={18} /> : <Eye size={18} />}
+            {showHidden ? 'Hide Hidden' : 'Show Hidden'}
+          </button>
+          <button 
+            onClick={triggerSync} 
+            disabled={syncing}
+            className={`glass-button primary ${syncing ? 'btn-pulse' : ''}`}
+          >
+            <RefreshCw size={18} className={syncing ? "spinning" : ""} />
+            {syncing ? 'Generating...' : 'Refresh AI'}
+          </button>
+        </div>
       </div>
 
       {recommendations.length === 0 ? (
@@ -105,13 +125,15 @@ function Dashboard() {
         </div>
       ) : (
         <div className="recommendations-grid">
-          {recommendations.map((track) => (
-            <div key={track.id} className="glass-panel track-card">
+          {recommendations
+            .filter(track => showHidden ? true : !track.hidden)
+            .map((track) => (
+            <div key={track.id} className={`glass-panel track-card ${track.hidden ? 'hidden-track' : ''}`}>
               <div className="track-image-container">
                 {track.image_url ? (
                   <img src={track.image_url} alt={track.title} className="track-image" />
                 ) : (
-                  <div className="track-image-placeholder">No Cover Art</div>
+                  <div className="track-image-placeholder">No Cover</div>
                 )}
               </div>
               <div className="track-info">
@@ -123,39 +145,47 @@ function Dashboard() {
                 <div className="track-actions">
                   {track.status === 'recommended' && (
                     <>
-                      <button className="glass-button" onClick={() => handleDownload(track.id)}>
-                        <Download size={16} /> Download
+                      <button className="glass-button" onClick={() => handleDownload(track.id)} title="Download">
+                        <Download size={14} /> 
                       </button>
-                      <button className="glass-button danger" onClick={() => handleDislike(track)}>
-                        <X size={16} /> Dislike
+                      <button className="glass-button danger" onClick={() => handleDislike(track)} title="Dislike (Train AI)">
+                        <X size={14} /> 
                       </button>
                     </>
                   )}
                   {track.status === 'queued' && (
                     <button className="glass-button" disabled style={{opacity: 0.7}}>
-                      <RefreshCw size={16} className="spinning" /> Queued
+                      <RefreshCw size={14} className="spinning" />
                     </button>
                   )}
                   {track.status === 'downloaded' && (
                     <>
-                      <button className="glass-button" disabled style={{background: 'rgba(16, 185, 129, 0.2)', color: 'var(--success-color)', border: '1px solid rgba(16, 185, 129, 0.4)'}}>
-                        <Check size={16} /> Downloaded
+                      <button className="glass-button" disabled style={{background: 'rgba(16, 185, 129, 0.2)', color: 'var(--success-color)', border: '1px solid rgba(16, 185, 129, 0.4)'}} title="Downloaded">
+                        <Check size={14} /> 
                       </button>
-                      <button className="glass-button danger" onClick={() => handleDislike(track)}>
-                        <X size={16} /> Dislike
+                      <button className="glass-button danger" onClick={() => handleDislike(track)} title="Dislike">
+                        <X size={14} /> 
                       </button>
                     </>
                   )}
                   {track.status === 'failed' && (
                     <>
-                      <button className="glass-button danger" disabled style={{opacity: 0.9}}>
-                        <AlertTriangle size={16} /> Failed
+                      <button className="glass-button danger" disabled style={{opacity: 0.9}} title="Failed">
+                        <AlertTriangle size={14} /> 
                       </button>
-                      <button className="glass-button danger" onClick={() => handleDislike(track)}>
-                        <X size={16} /> Dislike
+                      <button className="glass-button danger" onClick={() => handleDislike(track)} title="Dislike">
+                        <X size={14} /> 
                       </button>
                     </>
                   )}
+                  {/* Hide Toggle Button */}
+                  <button 
+                    className="glass-button" 
+                    onClick={() => handleHide(track.id, !track.hidden)} 
+                    title={track.hidden ? "Unhide" : "Hide from Dashboard"}
+                  >
+                    {track.hidden ? <Eye size={14} /> : <EyeOff size={14} />}
+                  </button>
                 </div>
               </div>
             </div>

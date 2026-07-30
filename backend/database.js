@@ -44,6 +44,7 @@ function initDb() {
       album TEXT,
       image_url TEXT,
       status TEXT DEFAULT 'recommended', -- recommended, queued, downloaded, failed
+      hidden INTEGER DEFAULT 0,
       recommended_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 

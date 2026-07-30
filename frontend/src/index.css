@@ -187,8 +187,8 @@ body {
 /* Dashboard Grid */
 .recommendations-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 2.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1.5rem;
 }
 
 /* Card Improvements */
@@ -201,6 +201,16 @@ body {
 .track-card:hover {
   transform: translateY(-4px);
   border-color: #3f3f46;
+}
+
+.hidden-track {
+  opacity: 0.5;
+  filter: grayscale(80%);
+}
+
+.hidden-track:hover {
+  opacity: 0.8;
+  filter: grayscale(40%);
 }
 
 .track-image-container {
@@ -230,12 +240,13 @@ body {
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
+  font-size: 0.9rem;
   font-weight: 500;
   background: #18181b;
 }
 
 .track-info {
-  padding: 1.5rem;
+  padding: 1rem;
   flex-grow: 1;
   display: flex;
   flex-direction: column;
@@ -244,28 +255,32 @@ body {
 }
 
 .track-title {
-  font-size: 1.3rem;
+  font-size: 1.1rem;
   font-weight: 700;
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.2rem;
   color: var(--text-primary);
   line-height: 1.3;
 }
 
 .track-artist {
   color: var(--text-secondary);
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 400;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 
 .track-actions {
   display: flex;
-  gap: 1rem;
+  gap: 0.5rem;
   margin-top: auto;
 }
 
 .track-actions button {
   flex: 1;
+  padding: 0.5rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 /* Settings Sections */

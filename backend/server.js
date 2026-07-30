@@ -77,7 +77,15 @@ app.get('/api/recommendations', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
+app.post('/api/recommendations/hide/:id', async (req, res) => {
+  try {
+    const { hidden } = req.body;
+    await dbRun('UPDATE history SET hidden = ? WHERE id = ?', [hidden ? 1 : 0, req.params.id]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 app.post('/api/recommendations/trigger', async (req, res) => {
   try {
     // Run async, don't wait
