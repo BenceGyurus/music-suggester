@@ -236,6 +236,53 @@ async function getAllRecentListens() {
   };
 }
 
+/**
+ * Fetch stats specifically for one account
+ */
+async function getStatsForAccount(account) {
+  let recent = [];
+  let starred = [];
+  let topAllTime = [];
+
+  const listens = await getRecentlyPlayedForAccount(account);
+  const frequents = await getFrequentAlbumsForAccount(account);
+  recent.push(...listens, ...frequents);
+
+  const favs = await getStarredTracksForAccount(account);
+  starred.push(...favs);
+
+  const tops = await getTopSongsForAccount(account);
+  topAllTime.push(...tops);
+
+  const deduplicate = (arr) => {
+    const map = new Map();
+    for (const track of arr) {
+      const key = `${track.artist}-${track.title}`;
+      if (!map.has(key)) {
+        map.set(key, { ...track, playCount: 1 });
+      } else {
+        map.get(key).playCount += 1;
+      }
+    }
+    const res = Array.from(map.values());
+    res.sort((a, b) => b.playCount - a.playCount);
+    return res;
+  };
+
+  recent = deduplicate(recent).slice(0, 100);
+  starred = deduplicate(starred).slice(0, 500);
+  topAllTime = deduplicate(topAllTime).slice(0, 500);
+
+  console.log(`Stats for account ${account.username}: ${recent.length} recent, ${starred.length} starred, ${topAllTime.length} top all-time.`);
+
+  return {
+    recent,
+    starred,
+    topAllTime
+  };
+}
+
 module.exports = {
-  getAllRecentListens
+  getAllRecentListens,
+  getStatsForAccount
 };

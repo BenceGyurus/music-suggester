@@ -11,10 +11,34 @@ async function runRecommendationJob() {
     const maxRecsStr = await getSetting('max_recommendations', '5');
     const maxRecs = parseInt(maxRecsStr) || 5;
 
-    // Generate recommendations
-    const recommendations = await generateRecommendations(maxRecs);
+    const accounts = await dbAll('SELECT * FROM navidrome_accounts');
+
+    let allRecommendations = [];
+
+    if (accounts.length === 0) {
+      console.log('No Navidrome accounts found, running global fallback job...');
+      const recs = await generateRecommendations(null);
+      allRecommendations.push(...recs);
+    } else {
+      for (const account of accounts) {
+        console.log(`Running job for account: ${account.username}`);
+        const recs = await generateRecommendations(account);
+        allRecommendations.push(...recs);
+      }
+    }
     
-    for (const rec of recommendations) {
+    // Deduplicate recommendations before saving
+    const uniqueRecs = [];
+    const seenRecs = new Set();
+    for (const r of allRecommendations) {
+      const key = `${r.artist}-${r.title}`;
+      if (!seenRecs.has(key)) {
+        seenRecs.add(key);
+        uniqueRecs.push(r);
+      }
+    }
+
+    for (const rec of uniqueRecs) {
       const title = rec.title || rec.Title || rec.TITLE;
       const artist = rec.artist || rec.Artist || rec.ARTIST;
       const album = rec.album || rec.Album || rec.ALBUM || '';

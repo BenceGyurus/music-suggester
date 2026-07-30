@@ -152,9 +152,43 @@ async function discoverSimilarArtists(artistName) {
 }
 
 /**
+ * Look up genres from iTunes API for a list of tracks.
+ * Returns a summary string of top genres.
+ */
+async function getGenreSummary(tracks) {
+  if (!tracks || tracks.length === 0) return 'None';
+  
+  const genres = {};
+  // Take up to 20 tracks to avoid hitting rate limits hard
+  const sample = tracks.slice(0, 20);
+  
+  for (const track of sample) {
+    try {
+      const term = encodeURIComponent(`${track.artist} ${track.title}`);
+      const response = await axios.get(`https://itunes.apple.com/search?term=${term}&entity=song&limit=1`, { timeout: 3000 });
+      if (response.data && response.data.results && response.data.results.length > 0) {
+        const genre = response.data.results[0].primaryGenreName;
+        if (genre) {
+          genres[genre] = (genres[genre] || 0) + 1;
+        }
+      }
+    } catch (e) {
+      // Ignore errors for individual tracks
+    }
+    // Sleep slightly to respect rate limits
+    await new Promise(r => setTimeout(r, 200));
+  }
+  
+  const sortedGenres = Object.entries(genres).sort((a, b) => b[1] - a[1]);
+  if (sortedGenres.length === 0) return 'None';
+  
+  return sortedGenres.map(([g, count]) => `${g} (${count} tracks)`).join(', ');
+}
+
+/**
  * Generate AI music recommendations via OpenRouter.
  */
-async function generateRecommendations(count = 5) {
+async function generateRecommendations(account = null) {
   const openRouterKey = await getSetting('openrouter_key');
   const aiModel = await getSetting('ai_model', 'google/gemini-2.5-flash'); // fallback to a default model
   const userMood = await getSetting('user_mood', '');
@@ -163,8 +197,16 @@ async function generateRecommendations(count = 5) {
     throw new Error('OpenRouter API key is not set.');
   }
 
-  // 1. Gather recent listens
-  const stats = await getAllRecentListens();
+  // 1. Gather stats (per account or global)
+  const { getStatsForAccount, getAllRecentListens } = require('./navidrome');
+  let stats;
+  if (account) {
+    console.log(`Gathering stats for account: ${account.username}`);
+    stats = await getStatsForAccount(account);
+  } else {
+    stats = await getAllRecentListens();
+  }
+
   const dislikes = await dbAll('SELECT name, artist FROM dislikes');
   const pastRecommendations = await dbAll('SELECT title, artist FROM history ORDER BY recommended_at DESC LIMIT 100');
   
@@ -174,6 +216,10 @@ async function generateRecommendations(count = 5) {
   const smallTop = (stats.topAllTime || []).slice(0, 50);
   const smallDislikes = (dislikes || []).slice(0, 30);
   const smallPastRecs = (pastRecommendations || []).slice(0, 30);
+
+  // Fetch genre summary
+  console.log('Fetching genre summaries for top tracks...');
+  const topGenreSummary = await getGenreSummary(stats.topAllTime);
 
   // Group dislikes to find blacklisted artists
   const dislikeCounts = {};
@@ -269,23 +315,16 @@ Example Output:
   ]
 }`;
 
-  let historyContext = "";
-  if (userMood) {
-    historyContext += `\nUSER MOOD / EXPLICIT INSTRUCTIONS (HIGHEST PRIORITY): ${userMood}\n`;
-  }
-  historyContext += `Blacklisted Artists (DO NOT SEARCH FOR THEM): ${blacklistStr}\n`;
-  
-  if (smallRecentListens.length > 0) {
-    historyContext += `Recent Listens: ${recentStr}\n`;
-  }
-  if (smallStarred.length > 0) {
-    historyContext += `User's Favorites (Starred): ${starredStr}\n`;
-  }
-  if (smallTop.length > 0) {
-    historyContext += `All-Time Top Most Played: ${topStr}\n`;
-  }
-  
-  historyContext += `Previously Downloaded: ${pastStr}\nDisliked: ${dislikeStr}`;
+  let historyContext = `
+RECENTLY PLAYED: ${recentStr}
+STARRED/FAVORITE TRACKS: ${starredStr}
+TOP ALL-TIME TRACKS: ${topStr}
+TOP GENRES (Based on iTunes Analysis): ${topGenreSummary}
+DISLIKED TRACKS (Do NOT recommend these or similar): ${dislikeStr}
+BLACKLISTED ARTISTS (NEVER recommend these): ${blacklistStr}
+PREVIOUSLY RECOMMENDED: ${pastStr}
+USER MOOD / CUSTOM INSTRUCTIONS: ${userMood}
+`;
 
   let commands = [];
   try {
