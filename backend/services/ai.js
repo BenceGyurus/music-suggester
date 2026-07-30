@@ -321,7 +321,8 @@ async function generateRecommendations(account = null) {
   const researchSystemPrompt = `You are a professional Music Researcher and Data Gatherer. Your job is to analyze the user's music history and decide what external searches you need to run to find good recommendations.
 You MUST output ONLY a raw JSON object with a "commands" array. Do not output conversational text.
 Allowed actions:
-- "search": Search a specific query (e.g. artist or genre). Requires "query" field.
+- "search": Search a general query (e.g. a genre, mood, or song title). Requires "query" field. Do NOT use this for finding an artist's tracks.
+- "search_artist_tracks": Search for tracks specifically by a given artist. Requires "artist" field. Use this when you want to recommend songs from a specific artist.
 - "similar": Find artists similar to a given artist. Requires "artist" field.
 - "trending": Get trending music. Requires "genre_id" field (0=Global, 132=Pop, 116=Rap, 152=Rock, 113=Dance, 165=R&B, 106=Electro, 129=Jazz).
 - "analyze_artist": Get genres and top tracks for a specific artist. Requires "artist" field.
@@ -330,6 +331,7 @@ Example Output:
 {
   "commands": [
     { "action": "analyze_artist", "artist": "Daft Punk" },
+    { "action": "search_artist_tracks", "artist": "Desh" },
     { "action": "similar", "artist": "Daft Punk" },
     { "action": "search", "query": "French House" },
     { "action": "trending", "genre_id": 106 }
@@ -376,12 +378,24 @@ USER MOOD / CUSTOM INSTRUCTIONS: ${userMood}
 
   let researchContext = ""; // Still keep some context for the LLM
 
-  for (const cmd of commands.slice(0, 4)) {
+  for (const cmd of commands) {
     try {
       if (cmd.action === 'search' && cmd.query) {
         console.log(`Executing search for: ${cmd.query}`);
         const res = await searchMusicDatabase(cmd.query, 'itunes');
         res.slice(0, 10).forEach(t => addCandidate(t, 'source_search'));
+      } else if (cmd.action === 'search_artist_tracks' && cmd.artist) {
+        console.log(`Executing search_artist_tracks for: ${cmd.artist}`);
+        const url = `https://itunes.apple.com/search?term=${encodeURIComponent(cmd.artist)}&entity=song&attribute=allArtistTerm&limit=15`;
+        const response = await axios.get(url, { timeout: 10000 });
+        const results = response.data.results || [];
+        const mapped = results.map(r => ({
+          artist: r.artistName,
+          title: r.trackName,
+          album: r.collectionName,
+          genre: r.primaryGenreName
+        }));
+        mapped.slice(0, 15).forEach(t => addCandidate(t, 'source_artist_search'));
       } else if (cmd.action === 'analyze_artist' && cmd.artist) {
         console.log(`Executing analyze_artist for: ${cmd.artist}`);
         const res = await getArtistInfo(cmd.artist);
