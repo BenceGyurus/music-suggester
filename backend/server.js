@@ -71,7 +71,13 @@ app.get('/api/recommendations', async (req, res) => {
   try {
     // Return all tracks so the frontend can display their status (including failed ones)
     const limit = parseInt(req.query.limit) || 20;
-    const tracks = await dbAll("SELECT * FROM history ORDER BY recommended_at DESC LIMIT ?", [limit]);
+    const tracks = await dbAll(`
+      SELECT h.*, a.username as account_username 
+      FROM history h 
+      LEFT JOIN navidrome_accounts a ON h.account_id = a.id 
+      ORDER BY h.recommended_at DESC 
+      LIMIT ?
+    `, [limit]);
     res.json(tracks);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -125,13 +131,22 @@ app.post('/api/dislike', async (req, res) => {
   try {
     const { id, type, name, artist } = req.body;
     
-    // Save to dislikes
-    await dbRun('INSERT INTO dislikes (type, name, artist) VALUES (?, ?, ?)', [type, name, artist || null]);
-    
+    let accountId = 0;
     if (id) {
+        // Fetch the account ID that this history row belongs to
+        const historyRow = await dbGet('SELECT account_id FROM history WHERE id = ?', [id]);
+        if (historyRow && historyRow.account_id) {
+            accountId = historyRow.account_id;
+        }
+    }
+
+    // Save to dislikes
+    await dbRun('INSERT INTO dislikes (account_id, type, name, artist) VALUES (?, ?, ?, ?)', [accountId, type, name, artist || null]);
+    
+    if (id && accountId) {
         // Backpropagation: Gradient Descent
         const { getWeights, updateWeight } = require('./database');
-        const weights = await getWeights();
+        const weights = await getWeights(accountId);
         const features = await dbAll('SELECT feature, value FROM recommendation_features WHERE history_id = ?', [id]);
         
         // 1. Reconstruct Sum
@@ -152,13 +167,14 @@ app.post('/api/dislike', async (req, res) => {
         for (const f of features) {
             // Delta W = - LearningRate * Error * Gradient * Input
             const penalty = -learningRate * error * gradient * f.value;
-            await updateWeight(f.feature, penalty);
-            console.log(`[Backprop] Weight '${f.feature}' changed by ${penalty.toFixed(4)}. (Sigmoid Score was ${(score*100).toFixed(1)}%)`);
+            await updateWeight(accountId, f.feature, penalty);
+            console.log(`[Backprop] Weight '${f.feature}' for Account ${accountId} changed by ${penalty.toFixed(4)}. (Sigmoid Score was ${(score*100).toFixed(1)}%)`);
         }
 
         // Adjust bias as well
         const biasPenalty = -learningRate * error * gradient * 1.0;
-        await updateWeight('bias', biasPenalty);
+        await updateWeight(accountId, 'bias', biasPenalty);
+        console.log(`[Backprop] Bias for Account ${accountId} changed by ${biasPenalty.toFixed(4)}`);
 
         // Delete from features and history
         await dbRun('DELETE FROM recommendation_features WHERE history_id = ?', [id]);

@@ -470,7 +470,7 @@ CRITICAL: You must strictly output the JSON array. Do not invent tracks. Only ra
 
   // Fetch weights
   const { getWeights } = require('../database');
-  const weights = await getWeights();
+  const weights = await getWeights(account?.id || 0);
   const minSetting = await getSetting('min_download_score', '0.75');
   let minScoreThreshold = parseFloat(minSetting);
 

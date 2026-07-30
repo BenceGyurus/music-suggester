@@ -266,7 +266,7 @@ body {
   color: var(--text-secondary);
   font-size: 0.9rem;
   font-weight: 400;
-  margin-bottom: 1rem;
+  margin-bottom: 0.3rem;
 }
 
 .track-actions {

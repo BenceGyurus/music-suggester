@@ -62,13 +62,13 @@ async function runRecommendationJob() {
           }
 
           const result = await dbRun(
-            'INSERT INTO history (title, artist, album, status, image_url) VALUES (?, ?, ?, ?, ?)',
-            [title, artist, album, 'recommended', imageUrl]
+            'INSERT INTO history (account_id, title, artist, album, status, image_url) VALUES (?, ?, ?, ?, ?, ?)',
+            [account.id, title, artist, album, 'recommended', imageUrl]
           );
 
           if (rec.features && Array.isArray(rec.features)) {
             const { getWeights } = require('../database');
-            const weights = await getWeights();
+            const weights = await getWeights(account.id);
 
             for (const featureStr of rec.features) {
               let featureName = featureStr;

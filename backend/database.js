@@ -38,6 +38,7 @@ function initDb() {
     // History (Recommended & Queued/Downloaded)
     db.run(`CREATE TABLE IF NOT EXISTS history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id INTEGER,
       track_id TEXT,
       title TEXT,
       artist TEXT,
@@ -51,35 +52,57 @@ function initDb() {
     // Dislikes
     db.run(`CREATE TABLE IF NOT EXISTS dislikes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id INTEGER,
       type TEXT, -- 'track' or 'artist'
       name TEXT NOT NULL,
       artist TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
-    // Neural Weights
+    // Neural Weights (Multi-User)
     db.run(`CREATE TABLE IF NOT EXISTS weights (
-      feature TEXT PRIMARY KEY,
-      weight REAL NOT NULL
+      account_id INTEGER NOT NULL,
+      feature TEXT NOT NULL,
+      weight REAL NOT NULL,
+      PRIMARY KEY (account_id, feature)
     )`);
 
-    // Default Weights (Normalized for Sigmoid)
-    db.run(`INSERT OR IGNORE INTO weights (feature, weight) VALUES 
-      ('source_similar', 1.0),
-      ('source_trending', 0.5),
-      ('source_search', 0.8),
-      ('source_favorite_artist', 1.5),
-      ('source_top_artist', 1.2),
-      ('llm_mood_match', 2.0),
-      ('llm_profile_match', 1.5),
-      ('bias', 0.0)
-    `);
+    // Migrations
+    db.get("SELECT account_id FROM weights LIMIT 1", (err) => {
+      if (err) {
+        // The column doesn't exist, which means it's the old schema
+        console.log('Migrating weights table to multi-user architecture...');
+        db.serialize(() => {
+          db.run('DROP TABLE IF EXISTS weights');
+          db.run(`CREATE TABLE weights (
+            account_id INTEGER NOT NULL,
+            feature TEXT NOT NULL,
+            weight REAL NOT NULL,
+            PRIMARY KEY (account_id, feature)
+          )`);
+          
+          db.all('SELECT id FROM navidrome_accounts', (err, accounts) => {
+            if (!err && accounts) {
+              const stmt = db.prepare('INSERT INTO weights (account_id, feature, weight) VALUES (?, ?, ?)');
+              const defaultWeights = [
+                ['source_similar', 1.0], ['source_trending', 0.5], ['source_search', 0.8],
+                ['source_favorite_artist', 1.5], ['source_top_artist', 1.2],
+                ['llm_mood_match', 2.0], ['llm_profile_match', 1.5], ['bias', 0.0]
+              ];
+              accounts.forEach(acc => {
+                defaultWeights.forEach(dw => {
+                  stmt.run(acc.id, dw[0], dw[1]);
+                });
+              });
+              stmt.finalize();
+            }
+          });
+        });
+      }
+    });
 
-    // Migration for v2.1.0: Divide legacy large weights by 10
-    db.run(`UPDATE weights SET weight = weight / 10.0 WHERE weight > 3.0 OR weight < -3.0`);
-    
-    // Quick migration to reset bias to neutral based on user feedback
-    db.run(`UPDATE weights SET weight = 0.0 WHERE feature = 'bias'`);
+    db.run("ALTER TABLE history ADD COLUMN account_id INTEGER", (err) => {});
+    db.run("ALTER TABLE dislikes ADD COLUMN account_id INTEGER", (err) => {});
 
     // Recommendation Features
     db.run(`CREATE TABLE IF NOT EXISTS recommendation_features (
@@ -131,8 +154,22 @@ const setSetting = async (key, value) => {
 };
 
 // Neural Weight helpers
-const getWeights = async () => {
-  const rows = await dbAll('SELECT feature, weight FROM weights');
+const initializeWeightsForAccount = async (accountId) => {
+  const defaultWeights = [
+    ['source_similar', 1.0], ['source_trending', 0.5], ['source_search', 0.8],
+    ['source_favorite_artist', 1.5], ['source_top_artist', 1.2],
+    ['llm_mood_match', 2.0], ['llm_profile_match', 1.5], ['bias', 0.0]
+  ];
+  for (const dw of defaultWeights) {
+    await dbRun('INSERT OR IGNORE INTO weights (account_id, feature, weight) VALUES (?, ?, ?)', [accountId, dw[0], dw[1]]);
+  }
+};
+
+const getWeights = async (accountId) => {
+  // Ensure weights exist for this account (e.g. if newly added)
+  await initializeWeightsForAccount(accountId);
+  
+  const rows = await dbAll('SELECT feature, weight FROM weights WHERE account_id = ?', [accountId]);
   const weights = {};
   for (const row of rows) {
     weights[row.feature] = row.weight;
@@ -140,8 +177,8 @@ const getWeights = async () => {
   return weights;
 };
 
-const updateWeight = async (feature, delta) => {
-  await dbRun('UPDATE weights SET weight = weight + ? WHERE feature = ?', [delta, feature]);
+const updateWeight = async (accountId, feature, delta) => {
+  await dbRun('UPDATE weights SET weight = weight + ? WHERE account_id = ? AND feature = ?', [delta, accountId, feature]);
 };
 
 module.exports = {

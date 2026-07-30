@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { X, Download, RefreshCw, Check, AlertTriangle, EyeOff, Eye } from 'lucide-react';
+import { X, Download, RefreshCw, Check, AlertTriangle, EyeOff, Eye, User } from 'lucide-react';
 
 const API_BASE = '/api';
 
@@ -140,6 +140,11 @@ function Dashboard() {
                 <div>
                   <h3 className="track-title" title={track.title}>{track.title}</h3>
                   <p className="track-artist">{track.artist}</p>
+                  {track.account_username && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'var(--glass-highlight)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                      <User size={12} /> {track.account_username}
+                    </div>
+                  )}
                 </div>
                 
                 <div className="track-actions">

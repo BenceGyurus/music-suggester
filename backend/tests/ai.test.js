@@ -16,18 +16,19 @@ describe('AI Service', () => {
     jest.clearAllMocks();
     
     getWeights.mockResolvedValue({
-      'source_similar': 10,
-      'source_trending': 5,
-      'source_search': 8,
-      'llm_mood_match': 2,
-      'llm_profile_match': 1.5
+      'source_similar': 1.0,
+      'source_trending': 0.5,
+      'source_search': 0.8,
+      'llm_mood_match': 2.0,
+      'llm_profile_match': 1.5,
+      'bias': 0.0
     });
 
     getSetting.mockImplementation((key) => {
       if (key === 'openrouter_key') return 'test_key';
       if (key === 'ai_model') return 'test_model';
       if (key === 'user_mood') return 'chill';
-      if (key === 'min_download_score') return '25';
+      if (key === 'min_download_score') return '0.75';
       return null;
     });
 
