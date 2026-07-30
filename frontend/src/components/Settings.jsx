@@ -113,29 +113,44 @@ function Settings() {
             />
           </div>
 
-          <div className="form-group">
-            <label>AI Model</label>
-            {models.length > 0 ? (
-              <select 
-                name="ai_model" 
-                value={settings.ai_model || ''} 
-                onChange={handleSettingChange} 
-                className="glass-input"
-              >
-                {models.map(m => (
-                  <option key={m.id} value={m.id}>{m.name || m.id}</option>
-                ))}
-              </select>
-            ) : (
+          <div className="form-group" style={{ display: 'flex', gap: '1.5rem' }}>
+            <div style={{ flex: 1 }}>
+              <label>AI Model</label>
+              {models.length > 0 ? (
+                <select 
+                  name="ai_model" 
+                  value={settings.ai_model || ''} 
+                  onChange={handleSettingChange} 
+                  className="glass-input"
+                >
+                  {models.map(m => (
+                    <option key={m.id} value={m.id}>{m.name || m.id}</option>
+                  ))}
+                </select>
+              ) : (
+                <input 
+                  type="text" 
+                  name="ai_model" 
+                  value={settings.ai_model || ''} 
+                  onChange={handleSettingChange} 
+                  className="glass-input" 
+                  placeholder="Enter model ID or save API key to load..."
+                />
+              )}
+            </div>
+            <div style={{ flex: 1 }}>
+              <label>AI Temperature</label>
               <input 
-                type="text" 
-                name="ai_model" 
-                value={settings.ai_model || ''} 
+                type="number" 
+                name="llm_temperature" 
+                value={settings.llm_temperature || '0.2'} 
                 onChange={handleSettingChange} 
                 className="glass-input" 
-                placeholder="Enter model ID or save API key to load..."
+                min="0"
+                max="2"
+                step="0.1"
               />
-            )}
+            </div>
           </div>
 
           <div className="form-group">

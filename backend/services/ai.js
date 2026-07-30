@@ -215,10 +215,15 @@ async function generateRecommendations(count = 5) {
         );
         
         if (!response.data || !response.data.choices || response.data.choices.length === 0) {
-          throw new Error('OpenRouter API returned an invalid response.');
+          const errorMsg = response.data?.error ? JSON.stringify(response.data.error) : 'Unknown OpenRouter Error';
+          throw new Error(`OpenRouter API returned an invalid response: ${errorMsg}`);
         }
 
-        let text = response.data.choices[0].message.content || '';
+        let text = response.data.choices[0].message?.content || '';
+        if (!text) {
+          throw new Error('OpenRouter API returned an empty message content.');
+        }
+
         let cleanText = text.replace(/```(?:json)?\s*([\s\S]*?)\s*```/g, '$1').trim();
         
         // Find the first `{` or `[` to parse JSON
@@ -237,7 +242,8 @@ async function generateRecommendations(count = 5) {
 
         return JSON.parse(cleanText);
       } catch (err) {
-        console.error(`AI call failed (attempt ${i+1}):`, err.message);
+        const axError = err.response?.data?.error ? JSON.stringify(err.response.data.error) : err.message;
+        console.error(`AI call failed (attempt ${i+1}):`, axError);
         if (i === maxTries - 1) throw err;
       }
     }
@@ -376,9 +382,12 @@ ${candidateString}
 Rate ALL candidates above.
 CRITICAL: You must strictly output the JSON array. Do not invent tracks. Only rate the ones listed.`;
 
+  const tempSetting = await getSetting('llm_temperature', '0.2');
+  const tempPhase3 = parseFloat(tempSetting) || 0.2;
+
   let llmScores = [];
   try {
-    const finalResult = await callAIWithRetry(generationSystemPrompt, generationUserPrompt, 3, 0.2);
+    const finalResult = await callAIWithRetry(generationSystemPrompt, generationUserPrompt, 3, tempPhase3);
     
     let parsed = finalResult;
     if (!Array.isArray(parsed) && parsed.tracks) parsed = parsed.tracks;
