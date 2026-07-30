@@ -152,7 +152,7 @@ async function getStarredTracksForAccount(account) {
  */
 async function getTopSongsForAccount(account) {
   try {
-    let params = { u: account.username, v: '1.16.1', c: 'AutoMusicSuggester', f: 'json', count: 50 };
+    let params = { u: account.username, v: '1.16.1', c: 'AutoMusicSuggester', f: 'json', count: 500 };
     if (account.salt) {
       params.t = generateSubsonicToken(account.password_or_token, account.salt);
       params.s = account.salt;
@@ -223,9 +223,9 @@ async function getAllRecentListens() {
     return res;
   };
 
-  recent = deduplicate(recent).slice(0, 50);
-  starred = deduplicate(starred).slice(0, 50);
-  topAllTime = deduplicate(topAllTime).slice(0, 50);
+  recent = deduplicate(recent).slice(0, 100);
+  starred = deduplicate(starred).slice(0, 500);
+  topAllTime = deduplicate(topAllTime).slice(0, 500);
 
   console.log(`Aggregated stats from Navidrome: ${recent.length} recent, ${starred.length} starred, ${topAllTime.length} top all-time.`);
   

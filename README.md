@@ -1,43 +1,82 @@
-# Auto Music Suggester
+# Auto Music Suggester 🎵🤖
 
-An AI-powered application that automatically recommends and downloads music based on your recent listening habits from Navidrome, and intelligently queues downloads without overloading your download server or introducing duplicates.
+[![Version](https://img.shields.io/badge/version-v2.1.0-blue.svg)](https://github.com/BenceGyurus/music-suggester)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
 
-This tool acts as the "brain" for your music downloading pipeline, automating the discovery of new music you'll love.
+**Auto Music Suggester** is a self-hosted, AI-powered music recommendation engine. It deeply analyzes your personal music library (via Navidrome/Subsonic APIs), researches the internet for new artists and tracks using Large Language Models (LLMs), and automatically downloads the best matches to a specified directory.
 
-## Dependencies
+Unlike standard static recommendation engines, this system uses a **Hybrid Neural Scoring Architecture (v2)** with backpropagation to continuously learn from your dislikes and adapt perfectly to your unique taste.
 
-To handle the actual music downloading, this application depends on an external download API. Specifically, it is designed to work out-of-the-box with **[Musikat](https://github.com/soggy8/musikat)** (or any downloader that implements the same API endpoints for `/api/search`, `/api/download`, and `/api/track/{id}/exists`). You will need to have Musikat (or an equivalent service) running alongside this application.
+---
 
-## Features
-- **AI Recommendations**: Uses OpenRouter (e.g., Gemini Flash, Claude) to recommend tracks based on what you actually listen to.
-- **AI Tool Calling (Zero Hallucinations)**: The AI is equipped with tools to query the **iTunes Search API** to guarantee real track names, and the **Deezer API** to fetch the latest trending music – all completely free and without requiring API keys!
-- **Navidrome Integration**: Fetches your recently played tracks across multiple Navidrome accounts using the Subsonic API. (If no account is linked, it automatically looks at the newest files in your library folder!)
-- **Duplicate Prevention**: Checks both your local `navidrome_library` directory and the Downloader's API to prevent duplicate downloads.
-- **Modern UI**: A sleek, dark-themed, glassmorphism UI for managing recommendations, disliking tracks (which trains the AI to avoid them), and tweaking settings.
-- **Smart Queueing**: Slowly processes recommendations in the background to avoid rate limits on your downloader.
+## 🌟 Key Features
 
-## Installation (Docker)
+*   **🧠 Hybrid Neural-AI Architecture**: Combines the creative semantic understanding of LLMs (Gemini, Claude, GPT) with a strict mathematical feature-weighting engine.
+*   **🔗 Deep Navidrome Integration**: Syncs seamlessly with Navidrome (Subsonic API) to read your recently played tracks, all-time favorites, and most played albums to build a macro-profile of your taste.
+*   **🎓 Reinforcement Learning (Backpropagation)**: Disliking a song dynamically penalizes the specific internal features (e.g., `source_trending`, `llm_mood_match`) that caused the system to recommend it, teaching it exactly *why* you didn't like it.
+*   **🛡️ Hallucination Guard**: Generative AI models often hallucinate fake song titles. This system prevents that by forcing the LLM to only evaluate and score real tracks fetched dynamically from iTunes and Deezer APIs.
+*   **🎛️ Explicit Mood Control**: Tell the AI exactly what you want to hear via Custom Instructions (e.g., *"I need fast-paced workout music"* or *"Only Hungarian pop from 2024"*).
+*   **🚫 Smart Blacklisting**: Dislike two songs from the same artist, and they are automatically blacklisted from future searches.
+*   **🐳 Docker Ready**: Easily deployable via Docker and Docker Compose.
 
-Use the provided `docker-compose.yml` to get started:
+---
 
-```yaml
-version: '3.8'
+## 🛠️ How it Works
 
-services:
-  auto-music-suggester:
-    image: ghcr.io/bencegyurus/music-suggester:latest
-    ports:
-      - "3001:3001"
-    volumes:
-      - ./data:/app/backend/data
-      - /path/to/your/navidrome/music:/music:ro # Read-only mount of your music library
-    restart: unless-stopped
-```
+The recommendation engine runs on a schedule (e.g., daily) and executes a 4-phase workflow:
 
-## Setup
-1. Open the UI at `http://localhost:3001`
-2. Go to **Settings** and set your **OpenRouter API Key**.
-3. Set your **Downloader URL**.
-4. Add your **Navidrome Account(s)**.
+1.  **Context Building & Profiling (LLM)**: The AI reads your deep Navidrome statistics (Top 500, Favorites, Recents), understands your custom mood instructions, and plans a "Research Strategy" (e.g., *Search for French House*, *Find similar artists to Daft Punk*).
+2.  **Candidate Gathering (API)**: The system executes the AI's research strategy by pinging Deezer and iTunes APIs to build a pool of 100% real, playable candidate tracks. It tags these tracks with "Source Features".
+3.  **Scoring (LLM & Neural Network)**: The LLM rates every candidate track from 0-10 on how well it fits your profile. Then, the Mathematical Engine multiplies these ratings by your personalized Weights (learned via Backpropagation) to calculate a `Final Score`.
+4.  **Threshold Download**: Any track that scores higher than your configured `Min Download Score` (default: 25) is automatically downloaded.
 
-The background worker will automatically scan your history every 12 hours and process the download queue continuously.
+---
+
+## 🚀 Installation & Setup
+
+### Prerequisites
+*   [Docker](https://docs.docker.com/get-docker/) & [Docker Compose](https://docs.docker.com/compose/install/)
+*   An [OpenRouter API Key](https://openrouter.ai/) (to use top-tier LLMs for cheap/free)
+*   *(Optional but recommended)* A [Navidrome](https://www.navidrome.org/) Server
+
+### Quick Start (Docker)
+
+1.  Clone the repository:
+    ```bash
+    git clone https://github.com/BenceGyurus/music-suggester.git
+    cd music-suggester
+    ```
+
+2.  Run with Docker Compose:
+    ```bash
+    docker-compose up -d
+    ```
+
+3.  Open the Web UI:
+    Navigate to `http://localhost:3000` in your browser.
+
+4.  Configuration:
+    *   Go to **Settings** and enter your OpenRouter API Key.
+    *   Connect your Navidrome account to enable deep personalization.
+    *   Set your **Min Download Score** and let the AI do the work!
+
+---
+
+## 💻 Tech Stack
+
+*   **Backend**: Node.js, Express, SQLite3, Jest
+*   **Frontend**: React, Vite, Tailwind CSS, Shadcn UI
+*   **AI Integration**: OpenRouter API (Access to Gemini 1.5 Pro, Claude 3.5 Sonnet, GPT-4o, Llama 3)
+*   **Music Metadata**: Deezer API, iTunes Search API, Subsonic API
+
+---
+
+## 🤝 Contributing
+
+Contributions, issues, and feature requests are welcome!
+Feel free to check [issues page](https://github.com/BenceGyurus/music-suggester/issues) if you want to contribute.
+
+## 📝 License
+
+This project is [MIT](LICENSE) licensed.

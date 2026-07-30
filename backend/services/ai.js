@@ -410,12 +410,12 @@ CRITICAL: You must strictly output the JSON array. Do not invent tracks. Only ra
     let score = 0;
     
     // Dynamically inject deep profile features
-    const isFavorite = smallStarred.some(fav => fav.artist.toLowerCase() === track.artist.toLowerCase());
+    const isFavorite = (stats.starred || []).some(fav => fav.artist.toLowerCase() === track.artist.toLowerCase());
     if (isFavorite && !track.features.includes('source_favorite_artist')) {
       track.features.push('source_favorite_artist');
     }
 
-    const isTop = smallTop.some(top => top.artist.toLowerCase() === track.artist.toLowerCase());
+    const isTop = (stats.topAllTime || []).some(top => top.artist.toLowerCase() === track.artist.toLowerCase());
     if (isTop && !track.features.includes('source_top_artist')) {
       track.features.push('source_top_artist');
     }
