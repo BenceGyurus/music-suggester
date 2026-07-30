@@ -55,6 +55,11 @@ async function runRecommendationJob() {
       }
     }
 
+    console.log(`[Scheduler] Diversity filter: ${uniqueRecs.length} passed, ${allRecommendations.length - uniqueRecs.length} skipped (limit: ${artistMaxPerBatch} per artist).`);
+
+    let insertedCount = 0;
+    let existingSkipped = 0;
+
     for (const rec of uniqueRecs) {
       const title = rec.title || rec.Title || rec.TITLE;
       const artist = rec.artist || rec.Artist || rec.ARTIST;
@@ -84,6 +89,8 @@ async function runRecommendationJob() {
             'INSERT INTO history (account_id, title, artist, album, status, image_url) VALUES (?, ?, ?, ?, ?, ?)',
             [recAccountId, title, artist, album, 'recommended', imageUrl]
           );
+          insertedCount++;
+          console.log(`[Scheduler] ✅ New recommendation: ${artist} - ${title}`);
 
           if (rec.features && Array.isArray(rec.features)) {
             const { getWeights } = require('../database');
@@ -106,9 +113,14 @@ async function runRecommendationJob() {
               );
             }
           }
+        } else {
+          existingSkipped++;
+          console.log(`[Scheduler] ⏭️ Already in history: ${artist} - ${title}`);
         }
       }
     }
+
+    console.log(`[Scheduler] 📊 Summary: ${insertedCount} new tracks saved, ${existingSkipped} already existed, ${allRecommendations.length - uniqueRecs.length} diversity-filtered.`);
   } catch (error) {
     console.error('Scheduled recommendation job failed:', error.message);
   }
