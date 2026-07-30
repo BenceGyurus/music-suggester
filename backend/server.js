@@ -149,10 +149,12 @@ app.post('/api/dislike', async (req, res) => {
       await deleteLocalFile(artist, name);
     }
     
-    if (id && accountId) {
+    if (id) {
         // Hide from dashboard
         await dbRun('UPDATE history SET hidden = 1 WHERE id = ?', [id]);
-
+    }
+    
+    if (id && accountId) {
         // Backpropagation: Gradient Descent
         const { getWeights, updateWeight } = require('./database');
         const weights = await getWeights(accountId);
