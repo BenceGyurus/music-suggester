@@ -1,6 +1,6 @@
 # Auto Music Suggester 🎵🤖
 
-[![Version](https://img.shields.io/badge/version-v2.1.0-blue.svg)](https://github.com/BenceGyurus/music-suggester)
+[![Version](https://img.shields.io/badge/version-v2.4.6-blue.svg)](https://github.com/BenceGyurus/music-suggester)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
 
@@ -16,8 +16,10 @@ Unlike standard static recommendation engines, this system uses a **Hybrid Neura
 *   **🔗 Deep Navidrome Integration**: Syncs seamlessly with Navidrome (Subsonic API) to read your recently played tracks, all-time favorites, and most played albums to build a macro-profile of your taste.
 *   **🎓 Reinforcement Learning (Backpropagation)**: Disliking a song dynamically penalizes the specific internal features (e.g., `source_trending`, `llm_mood_match`) that caused the system to recommend it, teaching it exactly *why* you didn't like it.
 *   **🛡️ Hallucination Guard**: Generative AI models often hallucinate fake song titles. This system prevents that by forcing the LLM to only evaluate and score real tracks fetched dynamically from iTunes and Deezer APIs.
+*   **👥 Multi-User Support**: Fully isolates neural network weights and music histories per user account.
+*   **🌍 Artist Diversity Engine**: Strictly enforces an artist quota per recommendation batch so the AI doesn't fixate on a single artist.
 *   **🎛️ Explicit Mood Control**: Tell the AI exactly what you want to hear via Custom Instructions (e.g., *"I need fast-paced workout music"* or *"Only Hungarian pop from 2024"*).
-*   **🚫 Smart Blacklisting**: Dislike two songs from the same artist, and they are automatically blacklisted from future searches.
+*   **🚫 Smart Blacklisting & Local Caching**: Dislike a song and it's instantly hidden and blacklisted from future searches, backed by an optimistic UI layer.
 *   **🐳 Docker Ready**: Easily deployable via Docker and Docker Compose.
 
 ---
@@ -29,7 +31,7 @@ The recommendation engine runs on a schedule (e.g., daily) and executes a 4-phas
 1.  **Context Building & Profiling (LLM)**: The AI reads your deep Navidrome statistics (Top 500, Favorites, Recents), understands your custom mood instructions, and plans a "Research Strategy" (e.g., *Search for French House*, *Find similar artists to Daft Punk*).
 2.  **Candidate Gathering (API)**: The system executes the AI's research strategy by pinging Deezer and iTunes APIs to build a pool of 100% real, playable candidate tracks. It tags these tracks with "Source Features".
 3.  **Scoring (LLM & Neural Network)**: The LLM rates every candidate track from 0-10 on how well it fits your profile. Then, the Mathematical Engine multiplies these ratings by your personalized Weights (learned via Backpropagation) to calculate a `Final Score`.
-4.  **Threshold Download**: Any track that scores higher than your configured `Min Download Score` (default: 25) is automatically downloaded.
+4.  **Threshold Download**: Any track that scores higher than your configured `Min Download Score` (default: 0.75, representing a 75% confidence probability) is queued and automatically downloaded via the background worker.
 
 ---
 
