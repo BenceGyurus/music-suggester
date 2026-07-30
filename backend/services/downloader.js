@@ -70,14 +70,28 @@ async function searchTrackOnDownloader(artist, title) {
 
   const url = downloaderUrl.endsWith('/') ? downloaderUrl : downloaderUrl + '/';
   
+  // Try to determine the configured provider from health check
+  let provider = 'deezer';
+  try {
+    const health = await axios.get(`${url}api/health`, { timeout: 3000 });
+    if (health.data && health.data.default_metadata_provider) {
+      provider = health.data.default_metadata_provider;
+    }
+  } catch (e) {
+    console.error('Could not fetch downloader health, defaulting to deezer');
+  }
+
   const response = await axios.post(`${url}api/search`, {
     query: `${artist} ${title}`,
-    provider: 'spotify', // or deezer
+    provider: provider,
     limit: 1
   }, { timeout: 10000 });
 
   if (response.data && response.data.length > 0) {
-    return response.data[0]; // { id, title, artist, album, etc. }
+    // Save the provider we used so queueDownload can use the same one
+    const track = response.data[0];
+    track._provider = provider;
+    return track; // { id, title, artist, album, etc. }
   }
   return null;
 }
@@ -103,7 +117,7 @@ async function checkDownloaderAPIExists(trackId) {
 /**
  * Queues the download via Downloader API
  */
-async function queueDownload(trackId) {
+async function queueDownload(trackId, provider = 'deezer') {
     const downloaderUrl = await getSetting('downloader_url');
     if (!downloaderUrl) throw new Error('Downloader URL not set');
     const url = downloaderUrl.endsWith('/') ? downloaderUrl : downloaderUrl + '/';
@@ -113,7 +127,7 @@ async function queueDownload(trackId) {
         track_id: trackId,
         location: 'navidrome',
         navidrome_library: mountPath,
-        provider: 'spotify',
+        provider: provider,
         format: 'mp3'
     }, { timeout: 10000 });
 
@@ -144,7 +158,7 @@ async function processTrackDownload(artist, title) {
     }
 
     // 4. Download
-    await queueDownload(track.id);
+    await queueDownload(track.id, track._provider || 'deezer');
     console.log(`Queued download for ${artist} - ${title}`);
     return { status: 'queued', track };
 }
