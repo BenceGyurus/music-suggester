@@ -59,6 +59,15 @@ function initDb() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
+    // Verified Artists
+    db.run(`CREATE TABLE IF NOT EXISTS verified_artists (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE NOT NULL,
+      itunes_id TEXT NOT NULL,
+      genre TEXT,
+      verified_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+
     // Neural Weights (Multi-User)
     db.run(`CREATE TABLE IF NOT EXISTS weights (
       account_id INTEGER NOT NULL,

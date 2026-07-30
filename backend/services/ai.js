@@ -242,8 +242,9 @@ async function generateRecommendations(account = null) {
 
   // Fetch genre and artist summaries
   console.log('Fetching genre summaries for top tracks...');
+  const allUserTracks = [...(stats.recent || []), ...(stats.starred || []), ...(stats.topAllTime || [])];
   const topGenreSummary = await getGenreSummary(stats.topAllTime);
-  const topArtistSummary = getArtistSummary([...(stats.recent || []), ...(stats.starred || []), ...(stats.topAllTime || [])]);
+  const topArtistSummary = getArtistSummary(allUserTracks);
 
   // Group dislikes to find blacklisted artists
   const dislikeCounts = {};
@@ -390,18 +391,36 @@ USER MOOD / CUSTOM INSTRUCTIONS: ${userMood}
       } else if (cmd.action === 'search_artist_tracks' && cmd.artist) {
         console.log(`Executing search_artist_tracks for: ${cmd.artist}`);
         const country = await getSetting('itunes_country', 'HU');
-        const url = `https://itunes.apple.com/search?term=${encodeURIComponent(cmd.artist)}&entity=song&attribute=allArtistTerm&limit=50&country=${country}`;
+        
+        const { getVerifiedArtist } = require('./artistVerifier');
+        const verified = await getVerifiedArtist(cmd.artist, allUserTracks);
+        
+        let url;
+        if (verified && verified.itunes_id) {
+          console.log(`[Phase 2] Using VERIFIED iTunes ID for ${cmd.artist}: ${verified.itunes_id}`);
+          url = `https://itunes.apple.com/lookup?id=${verified.itunes_id}&entity=song&limit=50&country=${country}`;
+        } else {
+          url = `https://itunes.apple.com/search?term=${encodeURIComponent(cmd.artist)}&entity=song&attribute=allArtistTerm&limit=50&country=${country}`;
+        }
+        
         const response = await axios.get(url, { timeout: 10000 });
-        const results = response.data.results || [];
+        const results = (response.data.results || []).filter(r => r.wrapperType === 'track');
         const mapped = results.map(r => ({
           artist: r.artistName,
           title: r.trackName,
           album: r.collectionName,
           genre: r.primaryGenreName
         }));
-        const targetArtistLow = cmd.artist.toLowerCase();
-        const filtered = mapped.filter(t => t.artist && t.artist.toLowerCase().includes(targetArtistLow));
-        filtered.slice(0, 15).forEach(t => addCandidate(t, 'source_artist_search'));
+        
+        if (verified && verified.itunes_id) {
+          // If verified, we can trust all tracks returned by the lookup
+          mapped.slice(0, 15).forEach(t => addCandidate(t, 'source_artist_search'));
+        } else {
+          // Strict fallback filtering
+          const targetArtistLow = cmd.artist.toLowerCase();
+          const filtered = mapped.filter(t => t.artist && t.artist.toLowerCase().includes(targetArtistLow));
+          filtered.slice(0, 15).forEach(t => addCandidate(t, 'source_artist_search'));
+        }
       } else if (cmd.action === 'analyze_artist' && cmd.artist) {
         console.log(`Executing analyze_artist for: ${cmd.artist}`);
         const res = await getArtistInfo(cmd.artist);
