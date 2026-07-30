@@ -152,13 +152,15 @@ async function generateRecommendations(count = 5) {
   const pastStr = smallPastRecs.map(p => `${p.artist}-${p.title}`).join('; ');
 
   // 2. Provide explicit JSON example in system prompt
-  const systemPrompt = `You are a music recommender. You MUST return ONLY a JSON array of ${count} track objects. 
-CRITICAL: Do NOT output any markdown, explanations, or conversational text. Output ONLY the raw JSON array. 
+  const systemPrompt = `You are a music recommender. You MUST return ONLY a JSON object containing a "tracks" array of ${count} track objects. 
+CRITICAL: Do NOT output any markdown, explanations, or conversational text. Output ONLY the raw JSON object. 
 You must strictly follow this exact JSON format:
-[
-  { "title": "Track Name", "artist": "Artist Name", "album": "Album Name" },
-  { "title": "Track Name 2", "artist": "Artist Name 2", "album": "Album Name 2" }
-]
+{
+  "tracks": [
+    { "title": "Track Name", "artist": "Artist Name", "album": "Album Name" },
+    { "title": "Track Name 2", "artist": "Artist Name 2", "album": "Album Name 2" }
+  ]
+}
 
 You have access to tools to search real music databases. USE THEM to find real tracks before suggesting them if you are unsure about exact titles, OR use the get_trending_music tool to see what is currently popular and new! If you are not intimately familiar with the tracks in the user's history, USE the get_track_info tool to look up their genres and release years so you can search for similar music! If the user wants to discover new, smaller underground artists based on their library, USE the discover_similar_artists tool!`;
 
