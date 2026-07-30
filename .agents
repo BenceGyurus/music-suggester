@@ -14,3 +14,12 @@ instructions: |
   - Keep AI prompts token-efficient (e.g., using semi-colon separated lists instead of verbose context).
   - Use modern, dark-themed UI components for any frontend additions.
   - Check duplicates locally (`/music` mount) and via Downloader API before queuing downloads.
+
+  # AI Recommendation System Rules (v2.0+)
+  - ❌ THE OLD WAY (DO NOT USE): Previously, we asked the LLM to output exactly 5 tracks directly. This caused hallucinations (fake songs) and fixed-quota garbage generation. Do not revert to this.
+  - ✅ THE NEW WAY (Neural-Hybrid): We use a 4-Phase system:
+    1. Research Strategy (LLM): The LLM decides what to search for (based on deep Navidrome stats).
+    2. Candidate Gathering (API): We query Deezer/iTunes to get REAL songs. (Hallucinations are mathematically impossible here).
+    3. Scoring (Neural + LLM): Candidates are tagged with source features (e.g. `source_trending`, `source_favorite_artist`). The LLM is then used ONLY to rate them (0-10) with a low temperature (0.2).
+    4. Threshold Download: Final score = (Feature Weights) + (LLM Scores). Anything above `min_download_score` is downloaded.
+  - 🎓 Backpropagation: Disliking a song penalizes the internal weights that caused it to be downloaded. NEVER hardcode scores; always use the `weights` table.
