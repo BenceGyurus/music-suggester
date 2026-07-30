@@ -10,7 +10,8 @@ function Settings() {
     ai_model: 'google/gemini-2.5-flash',
     downloader_url: '',
     navidrome_library_path: '/music',
-    auto_download: 'true'
+    auto_download: 'true',
+    diversity_level: '2'
   });
   
   const [accounts, setAccounts] = useState([]);
@@ -215,6 +216,56 @@ function Settings() {
               rows={3}
               style={{ resize: 'vertical' }}
             />
+          </div>
+
+          <div className="form-group">
+            <label style={{ marginBottom: '1rem' }}>Recommendation Diversity</label>
+            <div style={{
+              background: 'rgba(0,0,0,0.25)',
+              borderRadius: '16px',
+              padding: '2rem',
+              border: '1px solid rgba(255,255,255,0.06)',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '0.5rem' }}>
+                {settings.diversity_level === '1' ? '🎯 Familiar' : settings.diversity_level === '3' ? '🌍 Discover' : '⚖️ Balanced'}
+              </div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '1.2rem', lineHeight: '1.5' }}>
+                {settings.diversity_level === '1'
+                  ? 'Safe mode — stay close to your existing taste. Recommends tracks from artists you already love.'
+                  : settings.diversity_level === '3'
+                  ? 'Explore! Maximum variety — new artists, genres, and surprises you\'ve never heard.'
+                  : 'A mix of familiar favorites and fresh discoveries. (Default)'}
+              </div>
+              <input
+                type="range"
+                name="diversity_level"
+                min="1"
+                max="3"
+                step="1"
+                value={settings.diversity_level || '2'}
+                onChange={handleSettingChange}
+                style={{
+                  width: '100%',
+                  maxWidth: '320px',
+                  height: '6px',
+                  borderRadius: '3px',
+                  appearance: 'none',
+                  WebkitAppearance: 'none',
+                  background: `linear-gradient(90deg, 
+                    rgba(99, 102, 241, 0.8) 0%, 
+                    rgba(168, 85, 247, 0.8) 50%, 
+                    rgba(236, 72, 153, 0.8) 100%)`,
+                  outline: 'none',
+                  cursor: 'pointer'
+                }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', maxWidth: '320px', margin: '0.5rem auto 0 auto' }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Familiar</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Balanced</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Discover</span>
+              </div>
+            </div>
           </div>
         </div>
         

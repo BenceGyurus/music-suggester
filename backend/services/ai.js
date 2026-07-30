@@ -215,6 +215,7 @@ async function generateRecommendations(account = null) {
   const openRouterKey = await getSetting('openrouter_key');
   const aiModel = await getSetting('ai_model', 'google/gemini-2.5-flash'); // fallback to a default model
   const userMood = await getSetting('user_mood', '');
+  const diversityLevel = parseInt(await getSetting('diversity_level', '2')) || 2;
   
   if (!openRouterKey) {
     throw new Error('OpenRouter API key is not set.');
@@ -322,9 +323,19 @@ async function generateRecommendations(account = null) {
   // --- PHASE 1: Profiling and Research Strategy ---
   console.log(`[Phase 1] Analyzing profile using ${aiModel}...`);
   
+  // Diversity-dependent prompt instruction
+  let diversityInstruction;
+  if (diversityLevel === 1) {
+    diversityInstruction = 'CRITICAL: You must STRICTLY limit your searches to the user\'s favorite artists and genres. Recommend tracks ONLY from artists they already listen to. Do NOT explore outside their existing taste.';
+  } else if (diversityLevel === 3) {
+    diversityInstruction = 'CRITICAL: You are in DISCOVERY MODE. You must actively explore completely NEW artists, edge genres, and wildcards that the user has NEVER listened to but might enjoy based on their taste. Output EXTREMELY diverse commands. Each command MUST target a DIFFERENT artist or genre. Do NOT recommend any artist the user already listens to.';
+  } else {
+    diversityInstruction = 'CRITICAL: You must ensure ARTIST DIVERSITY. If outputting multiple commands, target DIFFERENT artists. Do not fixate on a single artist, but stay within their general genre preferences.';
+  }
+
   const researchSystemPrompt = `You are a professional Music Researcher and Data Gatherer. Your job is to analyze the user's music history and decide what external searches you need to run to find good recommendations.
 You MUST output ONLY a raw JSON object with a "commands" array. Do not output conversational text.
-CRITICAL: You must ensure ARTIST DIVERSITY. If outputting multiple commands, target DIFFERENT artists. Do not fixate on a single artist!
+${diversityInstruction}
 Allowed actions:
 - "search": Search a general query (e.g. a genre, mood, or song title). Requires "query" field. Do NOT use this for finding an artist's tracks.
 - "search_artist_tracks": Search for tracks specifically by a given artist. Requires "artist" field. Use this when you want to recommend songs from a specific artist.
@@ -497,7 +508,15 @@ CRITICAL: You must strictly output the JSON array. Do not invent tracks. Only ra
 IMPORTANT VERIFICATION: Check the "Genre" of each candidate track! If the artist name matches the user's favorite artist, but the genre is completely different (e.g. user likes Hungarian Rap, but candidate is Lo-Fi or Indian Classical), this means it is a DIFFERENT artist with the same name. Score it 0!`;
 
   const tempSetting = await getSetting('llm_temperature', '0.2');
-  const tempPhase3 = parseFloat(tempSetting) || 0.2;
+  // Override temperature based on diversity level
+  let tempPhase3;
+  if (diversityLevel === 1) {
+    tempPhase3 = 0.1;
+  } else if (diversityLevel === 3) {
+    tempPhase3 = 0.9;
+  } else {
+    tempPhase3 = parseFloat(tempSetting) || 0.5;
+  }
 
   let llmScores = [];
   try {

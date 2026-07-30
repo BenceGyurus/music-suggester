@@ -10,6 +10,10 @@ async function runRecommendationJob() {
   try {
     const maxRecsStr = await getSetting('max_recommendations', '5');
     const maxRecs = parseInt(maxRecsStr) || 5;
+    const diversityLevel = parseInt(await getSetting('diversity_level', '2')) || 2;
+    
+    // Artist quota per batch based on diversity slider
+    const artistMaxPerBatch = diversityLevel === 1 ? 5 : diversityLevel === 3 ? 1 : 2;
 
     const accounts = await dbAll('SELECT * FROM navidrome_accounts');
 
@@ -41,7 +45,7 @@ async function runRecommendationJob() {
 
       if (!seenRecs.has(key)) {
         const count = artistCounts[artistKey] || 0;
-        if (count < 2) {
+        if (count < artistMaxPerBatch) {
           artistCounts[artistKey] = count + 1;
           seenRecs.add(key);
           uniqueRecs.push(r);
@@ -58,7 +62,7 @@ async function runRecommendationJob() {
       const recAccountId = rec._account ? rec._account.id : null;
 
       if (title && artist) {
-        // Check if already in history
+        // Check if already in history (hidden or not — if user disliked it, don't re-recommend)
         const existing = await dbGet('SELECT id FROM history WHERE title = ? AND artist = ?', [title, artist]);
         if (!existing) {
           // Fetch cover art quickly from iTunes
