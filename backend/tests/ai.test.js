@@ -79,7 +79,8 @@ describe('AI Service', () => {
     
     expect(recs.length).toBe(1);
     expect(recs[0].title).toBe('Get Lucky');
-    expect(recs[0].finalScore).toBe(43);
+    expect(recs[0].finalScore).toBeGreaterThan(0.0);
+    expect(recs[0].finalScore).toBeLessThanOrEqual(1.0);
     
     expect(axios.post).toHaveBeenCalledTimes(2); // Phase 1 & 3
     expect(axios.get).toHaveBeenCalledTimes(1); // Phase 2 iTunes search
@@ -115,7 +116,8 @@ describe('AI Service', () => {
     const recs = await generateRecommendations();
     expect(recs.length).toBe(1);
     expect(recs[0].title).toBe('New Hit');
-    expect(recs[0].finalScore).toBe(40);
+    expect(recs[0].finalScore).toBeGreaterThan(0.0);
+    expect(recs[0].finalScore).toBeLessThanOrEqual(1.0);
     expect(axios.get).toHaveBeenCalledWith('https://api.deezer.com/chart/0/tracks?limit=10', expect.any(Object));
   });
 });

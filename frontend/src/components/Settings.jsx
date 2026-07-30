@@ -178,15 +178,16 @@ function Settings() {
 
           <div className="form-group" style={{ display: 'flex', gap: '1.5rem' }}>
             <div style={{ flex: 1 }}>
-              <label>Min Download Score (Threshold)</label>
+              <label>Min Download Confidence (0.0 to 1.0)</label>
               <input 
                 type="number" 
                 name="min_download_score" 
-                value={settings.min_download_score || '15'} 
+                value={settings.min_download_score || '0.75'} 
                 onChange={handleSettingChange} 
                 className="glass-input" 
-                min="0"
-                max="100"
+                min="0.0"
+                max="1.0"
+                step="0.05"
               />
             </div>
             <div style={{ flex: 1 }}>

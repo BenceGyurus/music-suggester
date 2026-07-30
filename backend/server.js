@@ -121,17 +121,36 @@ app.post('/api/dislike', async (req, res) => {
     await dbRun('INSERT INTO dislikes (type, name, artist) VALUES (?, ?, ?)', [type, name, artist || null]);
     
     if (id) {
-        // Backpropagation: Penalize weights that led to this bad recommendation
-        const { updateWeight } = require('./database');
+        // Backpropagation: Gradient Descent
+        const { getWeights, updateWeight } = require('./database');
+        const weights = await getWeights();
         const features = await dbAll('SELECT feature, value FROM recommendation_features WHERE history_id = ?', [id]);
         
+        // 1. Reconstruct Sum
+        let sum = weights['bias'] || -3.0;
         for (const f of features) {
-            // Apply a learning rate penalty
-            // We penalize the feature by -0.5 multiplied by its activation value
-            const penalty = -0.5 * f.value; 
-            await updateWeight(f.feature, penalty);
-            console.log(`[Backprop] Penalized ${f.feature} by ${penalty} due to dislike.`);
+          sum += (weights[f.feature] || 0) * f.value;
         }
+
+        // 2. Calculate Sigmoid Score
+        const score = 1 / (1 + Math.exp(-sum));
+
+        // 3. Calculate Gradient for Dislike (Target = 0.0)
+        // Error = (Score - Target) = Score
+        const error = score;
+        const gradient = score * (1 - score);
+        const learningRate = 1.0; // Higher learning rate for noticeable immediate effect
+
+        for (const f of features) {
+            // Delta W = - LearningRate * Error * Gradient * Input
+            const penalty = -learningRate * error * gradient * f.value;
+            await updateWeight(f.feature, penalty);
+            console.log(`[Backprop] Weight '${f.feature}' changed by ${penalty.toFixed(4)}. (Sigmoid Score was ${(score*100).toFixed(1)}%)`);
+        }
+
+        // Adjust bias as well
+        const biasPenalty = -learningRate * error * gradient * 1.0;
+        await updateWeight('bias', biasPenalty);
 
         // Delete from features and history
         await dbRun('DELETE FROM recommendation_features WHERE history_id = ?', [id]);

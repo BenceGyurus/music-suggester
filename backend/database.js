@@ -62,16 +62,20 @@ function initDb() {
       weight REAL NOT NULL
     )`);
 
-    // Default Weights
+    // Default Weights (Normalized for Sigmoid)
     db.run(`INSERT OR IGNORE INTO weights (feature, weight) VALUES 
-      ('source_similar', 10.0),
-      ('source_trending', 5.0),
-      ('source_search', 8.0),
-      ('source_favorite_artist', 15.0),
-      ('source_top_artist', 12.0),
+      ('source_similar', 1.0),
+      ('source_trending', 0.5),
+      ('source_search', 0.8),
+      ('source_favorite_artist', 1.5),
+      ('source_top_artist', 1.2),
       ('llm_mood_match', 2.0),
-      ('llm_profile_match', 1.5)
+      ('llm_profile_match', 1.5),
+      ('bias', -3.0)
     `);
+
+    // Migration for v2.1.0: Divide legacy large weights by 10
+    db.run(`UPDATE weights SET weight = weight / 10.0 WHERE weight > 3.0 OR weight < -3.0`);
 
     // Recommendation Features
     db.run(`CREATE TABLE IF NOT EXISTS recommendation_features (

@@ -471,12 +471,12 @@ CRITICAL: You must strictly output the JSON array. Do not invent tracks. Only ra
   // Fetch weights
   const { getWeights } = require('../database');
   const weights = await getWeights();
-  const minSetting = await getSetting('min_download_score', '15');
+  const minSetting = await getSetting('min_download_score', '0.75');
   let minScoreThreshold = parseFloat(minSetting);
 
   // Calculate final scores
   for (const track of candidates) {
-    let score = 0;
+    let sum = weights['bias'] || -3.0; // Default bias if missing
     
     // Dynamically inject deep profile features
     const isFavorite = (stats.starred || []).some(fav => fav.artist.toLowerCase() === track.artist.toLowerCase());
@@ -489,33 +489,36 @@ CRITICAL: You must strictly output the JSON array. Do not invent tracks. Only ra
       track.features.push('source_top_artist');
     }
 
-    // 1. Source Features
+    // 1. Source Features (Binary 1.0)
     for (const feature of track.features) {
-      score += (weights[feature] || 0);
+      sum += (weights[feature] || 0);
     }
     
-    // 2. LLM Features
+    // 2. LLM Features (Normalized from 0-10 to 0.0-1.0)
     const llmRating = llmScores.find(s => s.title === track.title && s.artist === track.artist) || { mood_match: 0, profile_match: 0 };
-    const moodVal = parseFloat(llmRating.mood_match) || 0;
-    const profileVal = parseFloat(llmRating.profile_match) || 0;
+    const moodVal = (parseFloat(llmRating.mood_match) || 0) / 10.0;
+    const profileVal = (parseFloat(llmRating.profile_match) || 0) / 10.0;
     
+    // Record feature values for backprop
     track.features.push(`llm_mood_match_${moodVal}`);
     track.features.push(`llm_profile_match_${profileVal}`);
     
-    score += (moodVal * (weights['llm_mood_match'] || 0));
-    score += (profileVal * (weights['llm_profile_match'] || 0));
+    sum += (moodVal * (weights['llm_mood_match'] || 0));
+    sum += (profileVal * (weights['llm_profile_match'] || 0));
 
-    track.finalScore = score;
+    // Sigmoid Activation Function
+    const probability = 1 / (1 + Math.exp(-sum));
+    track.finalScore = probability;
   }
 
   // Sort by highest score first
   candidates.sort((a, b) => b.finalScore - a.finalScore);
 
   // Dynamic Threshold Logic
-  const hardFloor = 10;
+  const hardFloor = 0.50; // 50% confidence minimum
   if (candidates.length > 0 && candidates[0].finalScore < minScoreThreshold && candidates[0].finalScore >= hardFloor) {
-    console.log(`Best track score (${candidates[0].finalScore}) is below threshold (${minScoreThreshold}). Dynamically lowering threshold.`);
-    minScoreThreshold = candidates[0].finalScore;
+    console.log(`Best track score (${(candidates[0].finalScore * 100).toFixed(1)}%) is below threshold (${(minScoreThreshold * 100).toFixed(1)}%). Dynamically lowering threshold.`);
+    minScoreThreshold = candidates[0].finalScore - 0.001; // slightly below to ensure floating point math passes
   }
 
   const finalTracks = [];
