@@ -125,6 +125,13 @@ async function processQueue() {
       const result = await processTrackDownload(track.artist, track.title);
       
       if (result.status === 'queued') {
+         // Check if user hid it while we were downloading
+         const checkHidden = await dbGet("SELECT hidden FROM history WHERE id = ?", [track.id]);
+         if (checkHidden && checkHidden.hidden === 1) {
+            console.log(`[Scheduler] Track was disliked during download! Deleting ${track.artist} - ${track.title}`);
+            const { deleteLocalFile } = require('./fileSearch');
+            await deleteLocalFile(track.artist, track.title);
+         }
          await dbRun("UPDATE history SET status = 'downloaded', track_id = ?, image_url = ? WHERE id = ?", 
             [result.track.id, result.track.album?.cover_url || '', track.id]);
       } else if (result.status === 'skipped') {
