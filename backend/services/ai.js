@@ -335,7 +335,7 @@ Example Output:
 {
   "commands": [
     { "action": "analyze_artist", "artist": "Daft Punk" },
-    { "action": "search_artist_tracks", "artist": "Desh" },
+    { "action": "search_artist_tracks", "artist": "Queen" },
     { "action": "similar", "artist": "Daft Punk" },
     { "action": "search", "query": "French House" },
     { "action": "trending", "genre_id": 106 }
