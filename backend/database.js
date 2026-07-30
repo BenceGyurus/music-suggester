@@ -103,6 +103,7 @@ function initDb() {
 
     db.run("ALTER TABLE history ADD COLUMN account_id INTEGER", (err) => {});
     db.run("ALTER TABLE dislikes ADD COLUMN account_id INTEGER", (err) => {});
+    db.run("ALTER TABLE history ADD COLUMN hidden INTEGER DEFAULT 0", (err) => {});
 
     // Recommendation Features
     db.run(`CREATE TABLE IF NOT EXISTS recommendation_features (
