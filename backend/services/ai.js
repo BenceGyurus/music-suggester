@@ -408,9 +408,22 @@ USER MOOD / CUSTOM INSTRUCTIONS: ${userMood}
     }
   }
 
-  const candidates = Array.from(candidateMap.values());
+  const rawCandidates = Array.from(candidateMap.values());
+  const { isAlreadyDownloaded } = require('./fileSearch');
+  const candidates = [];
+  
+  // Filter out candidates already downloaded
+  for (const c of rawCandidates) {
+    const isDownloaded = await isAlreadyDownloaded(c.artist, c.title);
+    if (!isDownloaded) {
+      candidates.push(c);
+    } else {
+      console.log(`[FileSearch] Skipped candidate '${c.title}' by '${c.artist}' (Already downloaded).`);
+    }
+  }
+
   if (candidates.length === 0) {
-    throw new Error('No candidate tracks found during Phase 2.');
+    throw new Error('No candidate tracks found during Phase 2 (all candidates were already downloaded).');
   }
 
   // --- PHASE 3: LLM Feature Extraction & Mathematical Scoring ---
