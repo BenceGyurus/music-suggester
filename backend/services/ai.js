@@ -386,7 +386,7 @@ USER MOOD / CUSTOM INSTRUCTIONS: ${userMood}
         res.slice(0, 10).forEach(t => addCandidate(t, 'source_search'));
       } else if (cmd.action === 'search_artist_tracks' && cmd.artist) {
         console.log(`Executing search_artist_tracks for: ${cmd.artist}`);
-        const url = `https://itunes.apple.com/search?term=${encodeURIComponent(cmd.artist)}&entity=song&attribute=allArtistTerm&limit=15`;
+        const url = `https://itunes.apple.com/search?term=${encodeURIComponent(cmd.artist)}&entity=song&attribute=allArtistTerm&limit=50`;
         const response = await axios.get(url, { timeout: 10000 });
         const results = response.data.results || [];
         const mapped = results.map(r => ({
@@ -395,7 +395,9 @@ USER MOOD / CUSTOM INSTRUCTIONS: ${userMood}
           album: r.collectionName,
           genre: r.primaryGenreName
         }));
-        mapped.slice(0, 15).forEach(t => addCandidate(t, 'source_artist_search'));
+        const targetArtistLow = cmd.artist.toLowerCase();
+        const filtered = mapped.filter(t => t.artist && t.artist.toLowerCase().includes(targetArtistLow));
+        filtered.slice(0, 15).forEach(t => addCandidate(t, 'source_artist_search'));
       } else if (cmd.action === 'analyze_artist' && cmd.artist) {
         console.log(`Executing analyze_artist for: ${cmd.artist}`);
         const res = await getArtistInfo(cmd.artist);
