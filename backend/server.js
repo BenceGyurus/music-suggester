@@ -154,10 +154,10 @@ app.post('/api/dislike', async (req, res) => {
     
     if (id) {
         console.log(`[API] Hiding track from dashboard for id: ${id}`);
-        // Hide by ID and also hide any duplicates by same artist + title
+        // Hide by ID and also hide any duplicates by same artist + title (case-insensitive)
         await dbRun('UPDATE history SET hidden = 1 WHERE id = ?', [id]);
         if (artist && name) {
-            await dbRun('UPDATE history SET hidden = 1 WHERE artist = ? AND title = ?', [artist, name]);
+            await dbRun('UPDATE history SET hidden = 1 WHERE LOWER(artist) = LOWER(?) AND LOWER(title) = LOWER(?)', [artist, name]);
         }
         console.log(`[API] Successfully hidden track ${id}`);
     } else {

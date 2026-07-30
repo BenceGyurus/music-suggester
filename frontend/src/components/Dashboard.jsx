@@ -32,6 +32,14 @@ function Dashboard() {
     try {
       // Optimistic UI update
       setRecommendations(recommendations.filter(r => r.id !== track.id));
+      
+      // Store locally to prevent flashing on next poll if DB is slow
+      const hiddenIds = JSON.parse(localStorage.getItem('hiddenTracks') || '[]');
+      if (!hiddenIds.includes(track.id)) {
+        hiddenIds.push(track.id);
+        localStorage.setItem('hiddenTracks', JSON.stringify(hiddenIds));
+      }
+
       await axios.post(`${API_BASE}/dislike`, {
         id: track.id,
         type: 'track',
@@ -126,7 +134,14 @@ function Dashboard() {
       ) : (
         <div className="recommendations-grid">
           {recommendations
-            .filter(track => showHidden ? true : !track.hidden)
+            .filter(track => {
+              if (showHidden) return true;
+              if (track.hidden) return false;
+              // Check local storage fallback
+              const hiddenIds = JSON.parse(localStorage.getItem('hiddenTracks') || '[]');
+              if (hiddenIds.includes(track.id)) return false;
+              return true;
+            })
             .map((track) => (
             <div key={track.id} className={`glass-panel track-card ${track.hidden ? 'hidden-track' : ''}`}>
               <div className="track-image-container">

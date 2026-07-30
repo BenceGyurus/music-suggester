@@ -16,6 +16,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
     // Enable WAL mode for better concurrency and prevent SQLITE_BUSY
     db.run('PRAGMA journal_mode = WAL;');
     db.run('PRAGMA synchronous = NORMAL;');
+    db.configure('busyTimeout', 5000); // Wait up to 5s if DB is locked
     console.log('Connected to the SQLite database.');
     initDb();
   }
