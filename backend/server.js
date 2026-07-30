@@ -129,6 +129,7 @@ app.get('/api/models', async (req, res) => {
 // --- Dislikes API ---
 app.post('/api/dislike', async (req, res) => {
   try {
+    console.log('[API] /dislike called with body:', req.body);
     const { id, type, name, artist } = req.body;
     
     let accountId = 0;
@@ -141,17 +142,26 @@ app.post('/api/dislike', async (req, res) => {
     }
 
     // Save to dislikes
+    console.log('[API] Saving to dislikes table');
     await dbRun('INSERT INTO dislikes (account_id, type, name, artist) VALUES (?, ?, ?, ?)', [accountId, type, name, artist || null]);
     
     // Attempt to delete local file if it exists
     if (type === 'track' && name) {
+      console.log(`[API] Attempting to delete local file for ${artist} - ${name}`);
       const { deleteLocalFile } = require('./services/fileSearch');
       await deleteLocalFile(artist, name);
     }
     
     if (id) {
-        // Hide from dashboard
+        console.log(`[API] Hiding track from dashboard for id: ${id}`);
+        // Hide by ID and also hide any duplicates by same artist + title
         await dbRun('UPDATE history SET hidden = 1 WHERE id = ?', [id]);
+        if (artist && name) {
+            await dbRun('UPDATE history SET hidden = 1 WHERE artist = ? AND title = ?', [artist, name]);
+        }
+        console.log(`[API] Successfully hidden track ${id}`);
+    } else {
+        console.log(`[API] Warning: no ID provided, cannot hide from history!`);
     }
     
     if (id && accountId) {
