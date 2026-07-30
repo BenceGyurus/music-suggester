@@ -38,6 +38,7 @@ The recommendation engine runs on a schedule (e.g., daily) and executes a 4-phas
 ### Prerequisites
 *   [Docker](https://docs.docker.com/get-docker/) & [Docker Compose](https://docs.docker.com/compose/install/)
 *   An [OpenRouter API Key](https://openrouter.ai/) (to use top-tier LLMs for cheap/free)
+*   [Musikat](https://github.com/soggy8/musikat): This project relies on Musikat for the actual downloading of the selected tracks. You must have a Musikat instance running.
 *   *(Optional but recommended)* A [Navidrome](https://www.navidrome.org/) Server
 
 ### Quick Start (Docker)
