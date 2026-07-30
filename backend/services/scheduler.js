@@ -18,11 +18,13 @@ async function runRecommendationJob() {
     if (accounts.length === 0) {
       console.log('No Navidrome accounts found, running global fallback job...');
       const recs = await generateRecommendations(null);
+      recs.forEach(r => r._account = null);
       allRecommendations.push(...recs);
     } else {
       for (const account of accounts) {
         console.log(`Running job for account: ${account.username}`);
         const recs = await generateRecommendations(account);
+        recs.forEach(r => r._account = account);
         allRecommendations.push(...recs);
       }
     }
@@ -42,6 +44,7 @@ async function runRecommendationJob() {
       const title = rec.title || rec.Title || rec.TITLE;
       const artist = rec.artist || rec.Artist || rec.ARTIST;
       const album = rec.album || rec.Album || rec.ALBUM || '';
+      const recAccountId = rec._account ? rec._account.id : null;
 
       if (title && artist) {
         // Check if already in history
@@ -63,12 +66,12 @@ async function runRecommendationJob() {
 
           const result = await dbRun(
             'INSERT INTO history (account_id, title, artist, album, status, image_url) VALUES (?, ?, ?, ?, ?, ?)',
-            [account.id, title, artist, album, 'recommended', imageUrl]
+            [recAccountId, title, artist, album, 'recommended', imageUrl]
           );
 
           if (rec.features && Array.isArray(rec.features)) {
             const { getWeights } = require('../database');
-            const weights = await getWeights(account.id);
+            const weights = await getWeights(recAccountId || 0);
 
             for (const featureStr of rec.features) {
               let featureName = featureStr;
