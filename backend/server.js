@@ -143,7 +143,16 @@ app.post('/api/dislike', async (req, res) => {
     // Save to dislikes
     await dbRun('INSERT INTO dislikes (account_id, type, name, artist) VALUES (?, ?, ?, ?)', [accountId, type, name, artist || null]);
     
+    // Attempt to delete local file if it exists
+    if (type === 'track' && name) {
+      const { deleteLocalFile } = require('./services/fileSearch');
+      await deleteLocalFile(artist, name);
+    }
+    
     if (id && accountId) {
+        // Hide from dashboard
+        await dbRun('UPDATE history SET hidden = 1 WHERE id = ?', [id]);
+
         // Backpropagation: Gradient Descent
         const { getWeights, updateWeight } = require('./database');
         const weights = await getWeights(accountId);

@@ -21,8 +21,10 @@ function walkDir(dir, fileList = []) {
       if (stat.isDirectory()) {
         walkDir(fullPath, fileList);
       } else if (file.match(/\.(mp3|flac|m4a|ogg)$/i)) {
-        // Store the normalized full path to match artist folders + filenames
-        fileList.push(normalizeString(fullPath));
+        fileList.push({
+          normalized: normalizeString(fullPath),
+          original: fullPath
+        });
       }
     }
   } catch (err) {
@@ -58,13 +60,46 @@ async function isAlreadyDownloaded(artist, title) {
   // If we can't normalize properly, skip filtering
   if (!artNorm || !titleNorm) return false;
 
-  for (const normalizedPath of fileCache) {
+  for (const item of fileCache) {
     // Check if the path contains BOTH the artist and the title somewhere
-    if (normalizedPath.includes(artNorm) && normalizedPath.includes(titleNorm)) {
+    if (item.normalized.includes(artNorm) && item.normalized.includes(titleNorm)) {
       return true;
     }
   }
   return false;
 }
 
-module.exports = { isAlreadyDownloaded, buildFileCache };
+/**
+ * Attempts to find and delete a local file matching the artist and title.
+ * Used when a user explicitly dislikes a track that might have already been downloaded.
+ */
+async function deleteLocalFile(artist, title) {
+  if (Date.now() - lastCacheTime > CACHE_TTL || fileCache.length === 0) {
+    await buildFileCache();
+  }
+
+  const artNorm = normalizeString(artist);
+  const titleNorm = normalizeString(title);
+
+  if (!artNorm || !titleNorm) return false;
+
+  for (let i = 0; i < fileCache.length; i++) {
+    const item = fileCache[i];
+    if (item.normalized.includes(artNorm) && item.normalized.includes(titleNorm)) {
+      try {
+        if (fs.existsSync(item.original)) {
+          fs.unlinkSync(item.original);
+          console.log(`[FileSearch] Deleted disliked file: ${item.original}`);
+          // Remove from cache
+          fileCache.splice(i, 1);
+          return true;
+        }
+      } catch (err) {
+        console.error(`[FileSearch] Failed to delete file ${item.original}:`, err.message);
+      }
+    }
+  }
+  return false;
+}
+
+module.exports = { isAlreadyDownloaded, buildFileCache, deleteLocalFile };
