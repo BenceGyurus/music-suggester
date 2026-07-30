@@ -23,9 +23,23 @@ async function runRecommendationJob() {
         // Check if already in history
         const existing = await dbGet('SELECT id FROM history WHERE title = ? AND artist = ?', [title, artist]);
         if (!existing) {
+          // Fetch cover art quickly from iTunes
+          let imageUrl = '';
+          try {
+            const axios = require('axios');
+            const url = `https://itunes.apple.com/search?term=${encodeURIComponent(artist + ' ' + title)}&entity=song&limit=1`;
+            const res = await axios.get(url, { timeout: 5000 });
+            if (res.data && res.data.results && res.data.results.length > 0) {
+              // Replace 100x100 with 600x600 for better quality
+              imageUrl = res.data.results[0].artworkUrl100?.replace('100x100bb', '600x600bb') || '';
+            }
+          } catch (e) {
+            console.error('Failed to fetch cover art for', artist, title);
+          }
+
           await dbRun(
-            'INSERT INTO history (title, artist, album, status) VALUES (?, ?, ?, ?)',
-            [title, artist, album, 'recommended']
+            'INSERT INTO history (title, artist, album, status, image_url) VALUES (?, ?, ?, ?, ?)',
+            [title, artist, album, 'recommended', imageUrl]
           );
         }
       }
