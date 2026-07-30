@@ -411,10 +411,10 @@ CRITICAL: You must strictly output the JSON array. Do not invent tracks. Only ra
   // Fetch weights
   const { getWeights } = require('../database');
   const weights = await getWeights();
-  const minScoreThreshold = parseFloat(await getSetting('min_download_score', '25'));
+  const minSetting = await getSetting('min_download_score', '15');
+  let minScoreThreshold = parseFloat(minSetting);
 
   // Calculate final scores
-  const finalTracks = [];
   for (const track of candidates) {
     let score = 0;
     
@@ -446,8 +446,21 @@ CRITICAL: You must strictly output the JSON array. Do not invent tracks. Only ra
     score += (profileVal * (weights['llm_profile_match'] || 0));
 
     track.finalScore = score;
-    
-    if (score >= minScoreThreshold) {
+  }
+
+  // Sort by highest score first
+  candidates.sort((a, b) => b.finalScore - a.finalScore);
+
+  // Dynamic Threshold Logic
+  const hardFloor = 10;
+  if (candidates.length > 0 && candidates[0].finalScore < minScoreThreshold && candidates[0].finalScore >= hardFloor) {
+    console.log(`Best track score (${candidates[0].finalScore}) is below threshold (${minScoreThreshold}). Dynamically lowering threshold.`);
+    minScoreThreshold = candidates[0].finalScore;
+  }
+
+  const finalTracks = [];
+  for (const track of candidates) {
+    if (track.finalScore >= minScoreThreshold) {
       finalTracks.push(track);
     }
   }

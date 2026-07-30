@@ -182,7 +182,7 @@ function Settings() {
               <input 
                 type="number" 
                 name="min_download_score" 
-                value={settings.min_download_score || '25'} 
+                value={settings.min_download_score || '15'} 
                 onChange={handleSettingChange} 
                 className="glass-input" 
                 min="0"
