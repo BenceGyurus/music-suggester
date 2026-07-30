@@ -282,8 +282,7 @@ Mix in some brand new/trending tracks if they fit the user's taste!
         {
           model: aiModel,
           messages: messages,
-          tools: tools,
-          response_format: { type: 'json_object' } // Help some models return JSON natively
+          tools: tools
         },
         {
           headers: {
@@ -365,20 +364,25 @@ Mix in some brand new/trending tracks if they fit the user's taste!
             }
             
             if (!Array.isArray(parsed)) {
+                console.log(`[AI Iteration ${i + 1}] RAW RESPONSE:\n${cleanText}`);
                 throw new Error('Response is not a JSON array of tracks.');
+            }
+            if (parsed.length === 0) {
+                console.log(`[AI Iteration ${i + 1}] RAW RESPONSE:\n${cleanText}`);
+                throw new Error(`The array is empty. You must generate exactly ${count} track objects.`);
             }
 
             // Ensure the array actually contains track objects, not just strings
-            if (parsed.length > 0) {
-                const first = parsed[0];
-                if (typeof first !== 'object' || first === null) {
-                    throw new Error('The array must contain JSON objects, not strings or numbers.');
-                }
-                const hasTitle = first.title || first.Title || first.TITLE;
-                const hasArtist = first.artist || first.Artist || first.ARTIST;
-                if (!hasTitle || !hasArtist) {
-                    throw new Error('Track objects MUST have "title" and "artist" keys.');
-                }
+            const first = parsed[0];
+            if (typeof first !== 'object' || first === null) {
+                console.log(`[AI Iteration ${i + 1}] RAW RESPONSE:\n${cleanText}`);
+                throw new Error('The array must contain JSON objects, not strings or numbers.');
+            }
+            const hasTitle = first.title || first.Title || first.TITLE;
+            const hasArtist = first.artist || first.Artist || first.ARTIST;
+            if (!hasTitle || !hasArtist) {
+                console.log(`[AI Iteration ${i + 1}] RAW RESPONSE:\n${cleanText}`);
+                throw new Error('Track objects MUST have "title" and "artist" keys.');
             }
             
             // If we reached here, parsing succeeded
