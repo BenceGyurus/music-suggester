@@ -132,8 +132,14 @@ async function processQueue() {
             const { deleteLocalFile } = require('./fileSearch');
             await deleteLocalFile(track.artist, track.title);
          }
-         await dbRun("UPDATE history SET status = 'downloaded', track_id = ?, image_url = ? WHERE id = ?", 
-            [result.track.id, result.track.album?.cover_url || '', track.id]);
+         const newCover = result.track.album?.cover_url || result.track.cover_url;
+         if (newCover) {
+             await dbRun("UPDATE history SET status = 'downloaded', track_id = ?, image_url = ? WHERE id = ?", 
+                [result.track.id, newCover, track.id]);
+         } else {
+             await dbRun("UPDATE history SET status = 'downloaded', track_id = ? WHERE id = ?", 
+                [result.track.id, track.id]);
+         }
       } else if (result.status === 'skipped') {
          await dbRun("UPDATE history SET status = 'downloaded' WHERE id = ?", [track.id]);
       } else {
