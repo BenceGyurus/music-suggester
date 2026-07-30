@@ -151,272 +151,165 @@ async function generateRecommendations(count = 5) {
   const dislikeStr = smallDislikes.map(d => `${d.artist}-${d.name}`).join('; ');
   const pastStr = smallPastRecs.map(p => `${p.artist}-${p.title}`).join('; ');
 
-  // 2. Provide explicit JSON example in system prompt
-  const systemPrompt = `You are a music recommender. You MUST return ONLY a JSON object containing a "tracks" array of ${count} track objects. 
-CRITICAL: Do NOT output any markdown, explanations, or conversational text. Output ONLY the raw JSON object. 
+  // Helper to reliably call AI and parse JSON
+  async function callAIWithRetry(sysPrompt, usrPrompt, maxTries = 3) {
+    for (let i = 0; i < maxTries; i++) {
+      try {
+        const response = await axios.post(
+          'https://openrouter.ai/api/v1/chat/completions',
+          {
+            model: aiModel,
+            messages: [
+              { role: 'system', content: sysPrompt },
+              { role: 'user', content: usrPrompt }
+            ]
+          },
+          {
+            headers: {
+              'Authorization': `Bearer ${openRouterKey}`,
+              'HTTP-Referer': 'https://github.com/bence/auto-music-suggester',
+              'X-Title': 'Auto Music Suggester'
+            },
+            timeout: 30000
+          }
+        );
+        
+        if (!response.data || !response.data.choices || response.data.choices.length === 0) {
+          throw new Error('OpenRouter API returned an invalid response.');
+        }
+
+        let text = response.data.choices[0].message.content || '';
+        let cleanText = text.replace(/```(?:json)?\s*([\s\S]*?)\s*```/g, '$1').trim();
+        
+        // Find the first `{` to parse JSON
+        const startIndex = cleanText.indexOf('{');
+        if (startIndex !== -1) {
+          cleanText = cleanText.substring(startIndex);
+        }
+
+        return JSON.parse(cleanText);
+      } catch (err) {
+        console.error(`AI call failed (attempt ${i+1}):`, err.message);
+        if (i === maxTries - 1) throw err;
+      }
+    }
+  }
+
+  // --- PHASE 1: Profiling and Research Strategy ---
+  console.log(`[Phase 1] Analyzing profile using ${aiModel}...`);
+  
+  const researchSystemPrompt = `You are a professional Music Researcher and Data Gatherer. Your job is to analyze the user's music history and decide what external searches you need to run to find good recommendations.
+You MUST output ONLY a raw JSON object with a "commands" array. Do not output conversational text.
+Allowed actions:
+- "search": Search a specific query (e.g. artist or genre). Requires "query" field.
+- "similar": Find artists similar to a given artist. Requires "artist" field.
+- "trending": Get trending music. Requires "genre_id" field (0=Global, 132=Pop, 116=Rap, 152=Rock, 113=Dance, 165=R&B, 106=Electro, 129=Jazz).
+
+Example Output:
+{
+  "commands": [
+    { "action": "similar", "artist": "Daft Punk" },
+    { "action": "search", "query": "French House" },
+    { "action": "trending", "genre_id": 106 }
+  ]
+}`;
+
+  let historyContext = "";
+  if (smallRecentListens.length > 0) {
+    historyContext = `Recent Listens: ${recentStr}\nPreviously Downloaded: ${pastStr}\nDisliked: ${dislikeStr}`;
+  } else {
+    historyContext = `Previously Downloaded: ${pastStr}\nDisliked: ${dislikeStr}`;
+  }
+
+  let commands = [];
+  try {
+    const phase1Result = await callAIWithRetry(researchSystemPrompt, `Based on this history, what should we search for? Max 3 commands.\n\n${historyContext}`);
+    commands = phase1Result.commands || [];
+  } catch (err) {
+    console.error('Phase 1 failed, proceeding with default trending search.', err.message);
+    commands = [{ action: 'trending', genre_id: 0 }];
+  }
+
+  // --- PHASE 2: Execution (Data Gathering) ---
+  console.log(`[Phase 2] Executing ${commands.length} research commands...`);
+  let gatheredData = [];
+
+  for (const cmd of commands.slice(0, 4)) { // max 4 commands to prevent spam
+    try {
+      if (cmd.action === 'search' && cmd.query) {
+        console.log(`Executing search for: ${cmd.query}`);
+        const res = await searchMusicDatabase(cmd.query, 'itunes');
+        gatheredData.push(`Search results for '${cmd.query}': ${JSON.stringify(res.slice(0, 5))}`);
+      } else if (cmd.action === 'similar' && cmd.artist) {
+        console.log(`Executing similar artists for: ${cmd.artist}`);
+        const res = await discoverSimilarArtists(cmd.artist);
+        gatheredData.push(`Artists similar to '${cmd.artist}': ${JSON.stringify(res.slice(0, 5))}`);
+      } else if (cmd.action === 'trending') {
+        const gid = cmd.genre_id || 0;
+        console.log(`Executing trending for genre: ${gid}`);
+        const res = await getTrendingMusic(gid, 5, null);
+        gatheredData.push(`Trending tracks (genre ${gid}): ${JSON.stringify(res.slice(0, 5))}`);
+      }
+    } catch (e) {
+      console.error(`Command ${cmd.action} failed:`, e.message);
+    }
+  }
+
+  // --- PHASE 3: Final Generation ---
+  console.log(`[Phase 3] Generating final ${count} recommendations...`);
+  
+  const generationSystemPrompt = `You are an expert music recommender. You MUST return ONLY a JSON object containing a "tracks" array of exactly ${count} track objects. 
+CRITICAL: Do NOT output any markdown, explanations, or conversational text. Output ONLY the raw JSON object.
 You must strictly follow this exact JSON format:
 {
   "tracks": [
     { "title": "Track Name", "artist": "Artist Name", "album": "Album Name" },
     { "title": "Track Name 2", "artist": "Artist Name 2", "album": "Album Name 2" }
   ]
-}
+}`;
 
-You have access to tools to search real music databases. USE THEM to find real tracks before suggesting them if you are unsure about exact titles, OR use the get_trending_music tool to see what is currently popular and new! If you are not intimately familiar with the tracks in the user's history, USE the get_track_info tool to look up their genres and release years so you can search for similar music! If the user wants to discover new, smaller underground artists based on their library, USE the discover_similar_artists tool!`;
+  const generationUserPrompt = `
+USER HISTORY:
+${historyContext}
 
-  let userPrompt = "";
-  if (smallRecentListens.length > 0) {
-    userPrompt = `
-Recent Listens: ${recentStr}
-Previously Downloaded: ${pastStr}
-Disliked: ${dislikeStr}
+RESEARCH RESULTS (Use this to find new recommendations):
+${gatheredData.join('\n\n')}
 
-Recommend ${count} new tracks whose style is a mix of the 'Recent Listens' and 'Previously Downloaded' tracks. 
-CRITICAL: You must STRICTLY EXCLUDE the exact tracks listed in 'Disliked' and 'Previously Downloaded'. 
-Mix in some brand new/trending tracks if they fit the user's taste!
-`;
-  } else {
-    userPrompt = `
-Previously Downloaded: ${pastStr}
-Disliked: ${dislikeStr}
+Recommend ${count} new tracks based on the history and research results. 
+CRITICAL: You must STRICTLY EXCLUDE the exact tracks listed in 'Disliked' and 'Previously Downloaded'.
+Output strictly the JSON object!`;
 
-Recommend ${count} new tracks whose style is similar to the 'Previously Downloaded' tracks.
-CRITICAL: You must STRICTLY EXCLUDE the exact tracks listed in 'Disliked' and 'Previously Downloaded'. 
-Mix in some brand new/trending tracks if they fit the user's taste!
-`;
-  }
-
-  let messages = [
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userPrompt }
-  ];
-
-  const tools = [
-    {
-      type: "function",
-      function: {
-        name: "search_music_database",
-        description: "Search iTunes or Deezer database for artists, genres, or tracks to get real existing track names and albums. Use this to avoid hallucinating tracks when you aren't looking for just the top trending hits.",
-        parameters: {
-          type: "object",
-          properties: {
-            query: {
-              type: "string",
-              description: "The search term, e.g. an artist name like 'Daft Punk' or a genre."
-            },
-            provider: {
-              type: "string",
-              description: "The provider to search on: 'itunes' or 'deezer'. Default is 'itunes'."
-            }
-          },
-          required: ["query"]
-        }
-      }
-    },
-    {
-      type: "function",
-      function: {
-        name: "get_trending_music",
-        description: "Get the current top trending and newest tracks globally, by specific genre, or by country. Use this to discover brand new music to recommend.",
-        parameters: {
-          type: "object",
-          properties: {
-            genre_id: {
-              type: "integer",
-              description: "Optional Deezer genre ID. Use 0 for All/Global, 132 for Pop, 116 for Rap/Hip Hop, 152 for Rock, 113 for Dance, 165 for R&B, 85 for Alternative, 106 for Electro, 129 for Jazz, 98 for Classical. Default is 0. Ignored if country is set."
-            },
-            limit: {
-              type: "integer",
-              description: "Optional number of tracks to fetch. Default is 15."
-            },
-            country: {
-              type: "string",
-              description: "Optional 2-letter country code (e.g., 'HU', 'US', 'GB') to get country-specific trending charts. If provided, genre_id is ignored."
-            }
-          },
-          required: []
-        }
-      }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'get_track_info',
-        description: 'Retrieve detailed metadata about a specific music track (e.g., genre, release date) to better understand the user\'s taste before generating recommendations.',
-        parameters: {
-          type: 'object',
-          properties: {
-            artist: { type: 'string', description: 'The name of the artist.' },
-            title: { type: 'string', description: 'The title of the track.' }
-          },
-          required: ['artist', 'title']
-        }
-      }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'discover_similar_artists',
-        description: 'Discover underground or smaller artists that are musically similar to a given artist. Useful for finding hidden gems based on the user\'s library.',
-        parameters: {
-          type: 'object',
-          properties: {
-            artist: { type: 'string', description: 'The name of the artist you want to find similar artists for.' }
-          },
-          required: ['artist']
-        }
-      }
-    }
-  ];
-
-  let maxIterations = 10;
-  let finalContent = null;
-
-  console.log(`Generating ${count} recommendations using model: ${aiModel}...`);
-
-  for (let i = 0; i < maxIterations; i++) {
-    try {
-      console.log(`[AI Iteration ${i + 1}/${maxIterations}] Waiting for response...`);
-      const response = await axios.post(
-        'https://openrouter.ai/api/v1/chat/completions',
-        {
-          model: aiModel,
-          messages: messages,
-          tools: tools
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${openRouterKey}`,
-            'HTTP-Referer': 'https://github.com/bence/auto-music-suggester',
-            'X-Title': 'Auto Music Suggester'
-          },
-          timeout: 20000
-        }
-      );
-
-      if (!response.data || !response.data.choices || response.data.choices.length === 0) {
-        console.error('OpenRouter returned an invalid response:', JSON.stringify(response.data));
-        throw new Error('OpenRouter API returned an invalid response or error: ' + JSON.stringify(response.data.error || 'Unknown Error'));
-      }
-
-      const rawMessage = response.data.choices[0].message;
-      const message = {
-        role: rawMessage.role || 'assistant',
-        content: rawMessage.content || ""
-      };
-      if (rawMessage.tool_calls) {
-        message.tool_calls = rawMessage.tool_calls;
-      }
-      messages.push(message);
-
-      if (message.tool_calls && message.tool_calls.length > 0) {
-        // Handle tool calls
-        for (const toolCall of message.tool_calls) {
-          if (toolCall.function.name === 'search_music_database') {
-            const args = JSON.parse(toolCall.function.arguments || '{}');
-            const query = args.query || '';
-            const provider = args.provider || 'itunes';
-            console.log(`AI called search_music_database with query: ${query}, provider: ${provider}`);
-            const searchResults = await searchMusicDatabase(query, provider);
-            messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(searchResults) });
-          } else if (toolCall.function.name === 'get_trending_music') {
-            const args = JSON.parse(toolCall.function.arguments || '{}');
-            const genreId = args.genre_id !== undefined ? args.genre_id : 0;
-            const limit = args.limit !== undefined ? args.limit : 15;
-            const country = args.country || null;
-            console.log(`AI called get_trending_music with genre_id: ${genreId}, limit: ${limit}, country: ${country}`);
-            const trendingResults = await getTrendingMusic(genreId, limit, country);
-            messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(trendingResults) });
-          } else if (toolCall.function.name === 'get_track_info') {
-            const args = JSON.parse(toolCall.function.arguments || '{}');
-            const artist = args.artist || '';
-            const title = args.title || '';
-            console.log(`AI called get_track_info with artist: ${artist}, title: ${title}`);
-            const infoResults = await getTrackInfo(artist, title);
-            messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(infoResults) });
-          } else if (toolCall.function.name === 'discover_similar_artists') {
-            const args = JSON.parse(toolCall.function.arguments || '{}');
-            const artist = args.artist || '';
-            console.log(`AI called discover_similar_artists with artist: ${artist}`);
-            const similarArtists = await discoverSimilarArtists(artist);
-            messages.push({ role: 'tool', tool_call_id: toolCall.id, content: JSON.stringify(similarArtists) });
-          }
-        }
-        // Continue loop to send tool results back to AI
-      } else {
-        // No tool calls. Check if it looks like JSON
-        let text = message.content || '';
-        let cleanText = text.replace(/```(?:json)?\s*([\s\S]*?)\s*```/g, '$1').trim();
-        
-        if (cleanText.startsWith('[') || cleanText.startsWith('{')) {
-          try {
-            // Attempt to parse and validate right here inside the loop
-            let parsed = JSON.parse(cleanText);
-            if (!Array.isArray(parsed) && parsed.tracks) {
-                parsed = parsed.tracks;
-            } else if (!Array.isArray(parsed)) {
-                for (const key in parsed) {
-                    if (Array.isArray(parsed[key])) {
-                        parsed = parsed[key];
-                        break;
-                    }
-                }
-            }
-            
-            if (!Array.isArray(parsed)) {
-                console.log(`[AI Iteration ${i + 1}] RAW RESPONSE:\n${cleanText}`);
-                throw new Error('Response is not a JSON array of tracks.');
-            }
-            if (parsed.length === 0) {
-                console.log(`[AI Iteration ${i + 1}] RAW RESPONSE:\n${cleanText}`);
-                throw new Error(`The array is empty. You must generate exactly ${count} track objects.`);
-            }
-
-            // Ensure the array actually contains track objects, not just strings
-            const first = parsed[0];
-            if (typeof first !== 'object' || first === null) {
-                console.log(`[AI Iteration ${i + 1}] RAW RESPONSE:\n${cleanText}`);
-                throw new Error('The array must contain JSON objects, not strings or numbers.');
-            }
-            const hasTitle = first.title || first.Title || first.TITLE;
-            const hasArtist = first.artist || first.Artist || first.ARTIST;
-            if (!hasTitle || !hasArtist) {
-                console.log(`[AI Iteration ${i + 1}] RAW RESPONSE:\n${cleanText}`);
-                throw new Error('Track objects MUST have "title" and "artist" keys.');
-            }
-            
-            // If we reached here, parsing succeeded
-            finalContent = parsed;
+  let finalTracks = [];
+  try {
+    const finalResult = await callAIWithRetry(generationSystemPrompt, generationUserPrompt, 5);
+    let parsed = finalResult;
+    
+    if (!Array.isArray(parsed) && parsed.tracks) {
+      parsed = parsed.tracks;
+    } else if (!Array.isArray(parsed)) {
+      for (const key in parsed) {
+        if (Array.isArray(parsed[key])) {
+            parsed = parsed[key];
             break;
-          } catch (parseError) {
-            console.log(`AI returned invalid JSON structure: ${parseError.message}. Asking to correct.`);
-            messages.push({
-              role: 'user',
-              content: `Invalid JSON format: ${parseError.message}. You MUST return ONLY a valid JSON array of track objects. Do not wrap it in other fields unless necessary, and do not output markdown or conversational text.`
-            });
-            continue;
-          }
-        } else {
-          console.log(`AI returned conversational text: "${text.substring(0, 50)}...", asking to correct.`);
-          messages.push({
-            role: 'user',
-            content: 'Invalid response. You MUST return ONLY a JSON array, or use a tool. Do NOT output conversational text, explanations, or acknowledge this message.'
-          });
-          continue; // Loop again
         }
       }
-    } catch (error) {
-      console.error('AI Recommendation Error during API call:', error.response ? error.response.data : error.message);
-      throw error;
     }
+    
+    if (!Array.isArray(parsed)) {
+      throw new Error('AI did not return a valid tracks array.');
+    }
+    if (parsed.length === 0) {
+      throw new Error('AI returned an empty tracks array.');
+    }
+
+    finalTracks = parsed;
+  } catch (err) {
+    console.error('Phase 3 failed:', err.message);
+    throw new Error('Failed to generate recommendations after multiple attempts.');
   }
 
-  if (!finalContent) {
-    throw new Error('AI failed to generate a final response after maximum iterations.');
-  }
-
-  console.log(`Successfully generated ${finalContent.length} recommendations.`);
-  return finalContent.slice(0, count);
+  console.log(`Successfully generated ${finalTracks.length} recommendations.`);
+  return finalTracks.slice(0, count);
 }
 
 module.exports = {
