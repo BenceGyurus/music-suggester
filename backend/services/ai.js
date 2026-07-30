@@ -90,6 +90,31 @@ async function getTrackInfo(artist, title) {
 }
 
 /**
+ * Fetch detailed metadata and top tracks for a specific artist.
+ */
+async function getArtistInfo(artistName) {
+  try {
+    const searchUrl = `https://api.deezer.com/search/artist?q=${encodeURIComponent(artistName)}&limit=1`;
+    const searchRes = await axios.get(searchUrl, { timeout: 10000 });
+    const artists = searchRes.data.data || [];
+    if (artists.length === 0) return { error: "Artist not found" };
+    
+    const artistId = artists[0].id;
+    const topTracksUrl = `https://api.deezer.com/artist/${artistId}/top?limit=5`;
+    const topTracksRes = await axios.get(topTracksUrl, { timeout: 10000 });
+    
+    return {
+      name: artists[0].name,
+      fans: artists[0].nb_fan,
+      top_tracks: (topTracksRes.data.data || []).map(t => t.title)
+    };
+  } catch (error) {
+    console.error('Get Artist Info Error:', error.message);
+    return { error: "Failed to fetch artist info" };
+  }
+}
+
+/**
  * Discover similar but smaller artists based on a known artist.
  */
 async function discoverSimilarArtists(artistName) {
@@ -132,6 +157,7 @@ async function discoverSimilarArtists(artistName) {
 async function generateRecommendations(count = 5) {
   const openRouterKey = await getSetting('openrouter_key');
   const aiModel = await getSetting('ai_model', 'google/gemini-2.5-flash'); // fallback to a default model
+  const userMood = await getSetting('user_mood', '');
   
   if (!openRouterKey) {
     throw new Error('OpenRouter API key is not set.');
@@ -141,14 +167,22 @@ async function generateRecommendations(count = 5) {
   const recentListens = await getAllRecentListens();
   const dislikes = await dbAll('SELECT name, artist FROM dislikes');
   const pastRecommendations = await dbAll('SELECT title, artist FROM history ORDER BY recommended_at DESC LIMIT 100');
-  // 1. Break into smaller context to prevent overwhelming small models
+  // Break into smaller context to prevent overwhelming small models
   // Limit to 15 recent, 5 frequent, 10 past, 5 dislikes
-  const smallRecentListens = recentListens.slice(0, 15);
-  const smallDislikes = dislikes.slice(0, 5);
+  const smallRecentListens = recentListens.slice(0, 20); // increased to 20 for better profile
+  const smallDislikes = dislikes;
   const smallPastRecs = pastRecommendations.slice(0, 10);
 
-  const recentStr = smallRecentListens.map(r => `${r.artist}-${r.title}`).join('; ');
-  const dislikeStr = smallDislikes.map(d => `${d.artist}-${d.name}`).join('; ');
+  // Group dislikes to find blacklisted artists
+  const dislikeCounts = {};
+  dislikes.forEach(d => {
+    dislikeCounts[d.artist] = (dislikeCounts[d.artist] || 0) + 1;
+  });
+  const blacklistedArtists = Object.keys(dislikeCounts).filter(a => dislikeCounts[a] >= 2);
+  const blacklistStr = blacklistedArtists.length > 0 ? blacklistedArtists.join(', ') : 'None';
+
+  const recentStr = smallRecentListens.map(r => `${r.artist}-${r.title} (Plays: ${r.playCount || 1})`).join('; ');
+  const dislikeStr = smallDislikes.slice(0, 10).map(d => `${d.artist}-${d.name}`).join('; ');
   const pastStr = smallPastRecs.map(p => `${p.artist}-${p.title}`).join('; ');
 
   // Helper to reliably call AI and parse JSON
@@ -204,10 +238,12 @@ Allowed actions:
 - "search": Search a specific query (e.g. artist or genre). Requires "query" field.
 - "similar": Find artists similar to a given artist. Requires "artist" field.
 - "trending": Get trending music. Requires "genre_id" field (0=Global, 132=Pop, 116=Rap, 152=Rock, 113=Dance, 165=R&B, 106=Electro, 129=Jazz).
+- "analyze_artist": Get genres and top tracks for a specific artist. Requires "artist" field.
 
 Example Output:
 {
   "commands": [
+    { "action": "analyze_artist", "artist": "Daft Punk" },
     { "action": "similar", "artist": "Daft Punk" },
     { "action": "search", "query": "French House" },
     { "action": "trending", "genre_id": 106 }
@@ -215,10 +251,15 @@ Example Output:
 }`;
 
   let historyContext = "";
+  if (userMood) {
+    historyContext += `\nUSER MOOD / EXPLICIT INSTRUCTIONS (HIGHEST PRIORITY): ${userMood}\n`;
+  }
+  historyContext += `Blacklisted Artists (DO NOT SEARCH FOR THEM): ${blacklistStr}\n`;
+  
   if (smallRecentListens.length > 0) {
-    historyContext = `Recent Listens: ${recentStr}\nPreviously Downloaded: ${pastStr}\nDisliked: ${dislikeStr}`;
+    historyContext += `Recent Listens: ${recentStr}\nPreviously Downloaded: ${pastStr}\nDisliked: ${dislikeStr}`;
   } else {
-    historyContext = `Previously Downloaded: ${pastStr}\nDisliked: ${dislikeStr}`;
+    historyContext += `Previously Downloaded: ${pastStr}\nDisliked: ${dislikeStr}`;
   }
 
   let commands = [];
@@ -240,6 +281,10 @@ Example Output:
         console.log(`Executing search for: ${cmd.query}`);
         const res = await searchMusicDatabase(cmd.query, 'itunes');
         gatheredData.push(`Search results for '${cmd.query}': ${JSON.stringify(res.slice(0, 5))}`);
+      } else if (cmd.action === 'analyze_artist' && cmd.artist) {
+        console.log(`Executing analyze_artist for: ${cmd.artist}`);
+        const res = await getArtistInfo(cmd.artist);
+        gatheredData.push(`Artist Info for '${cmd.artist}': ${JSON.stringify(res)}`);
       } else if (cmd.action === 'similar' && cmd.artist) {
         console.log(`Executing similar artists for: ${cmd.artist}`);
         const res = await discoverSimilarArtists(cmd.artist);
@@ -258,9 +303,13 @@ Example Output:
   // --- PHASE 3: Final Generation ---
   console.log(`[Phase 3] Generating final ${count} recommendations...`);
   
-  const generationSystemPrompt = `You are an expert music recommender. You MUST return ONLY a JSON object containing a "tracks" array of exactly ${count} track objects. 
-CRITICAL: Do NOT output any markdown, explanations, or conversational text. Output ONLY the raw JSON object.
-You must strictly follow this exact JSON format:
+  const generationSystemPrompt = `You are a professional Music Recommender.
+Based on the User's Profile (history, dislikes, and explicit instructions/mood) AND the Research Data provided, generate exactly ${count} music recommendations.
+Rules:
+1. Do not recommend artists the user has blacklisted or disliked.
+2. Ensure tracks match the user's mood if specified.
+3. Output MUST be ONLY a raw JSON array of objects with "title", "artist", and "album" keys. Do not output anything else.
+4. You must strictly follow this exact JSON format:
 {
   "tracks": [
     { "title": "Track Name", "artist": "Artist Name", "album": "Album Name" },
@@ -269,13 +318,13 @@ You must strictly follow this exact JSON format:
 }`;
 
   const generationUserPrompt = `
-USER HISTORY:
+USER PROFILE / HISTORY:
 ${historyContext}
 
 RESEARCH RESULTS (Use this to find new recommendations):
 ${gatheredData.join('\n\n')}
 
-Recommend ${count} new tracks based on the history and research results. 
+Recommend ${count} new tracks based on the profile and research results. 
 CRITICAL: You must STRICTLY EXCLUDE the exact tracks listed in 'Disliked' and 'Previously Downloaded'.
 Output strictly the JSON object!`;
 

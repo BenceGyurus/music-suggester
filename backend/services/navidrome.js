@@ -143,20 +143,27 @@ async function getAllRecentListens() {
     }
   }
 
-  // Deduplicate by artist + title
-  const uniqueListens = [];
-  const seen = new Set();
+  // Group by artist and title, tracking play count
+  const listenMap = new Map();
   
   for (const listen of allListens) {
     const key = `${listen.artist}-${listen.title}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      uniqueListens.push(listen);
+    if (!listenMap.has(key)) {
+      listenMap.set(key, { ...listen, playCount: 1 });
+    } else {
+      listenMap.get(key).playCount += 1;
     }
   }
 
-  console.log(`Found ${uniqueListens.length} unique recent listens from Navidrome/Local files.`);
-  return uniqueListens;
+  // Convert to array and sort by playCount (descending)
+  const uniqueListens = Array.from(listenMap.values());
+  uniqueListens.sort((a, b) => b.playCount - a.playCount);
+
+  // We can trim this to the top 50 to avoid blowing up the prompt context
+  const topListens = uniqueListens.slice(0, 50);
+
+  console.log(`Aggregated ${topListens.length} top recent listens from Navidrome/Local files.`);
+  return topListens;
 }
 
 module.exports = {

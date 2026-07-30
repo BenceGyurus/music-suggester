@@ -187,6 +187,19 @@ function Settings() {
               </select>
             </div>
           </div>
+
+          <div className="form-group">
+            <label>Custom AI Instructions / Mood</label>
+            <textarea 
+              name="user_mood" 
+              value={settings.user_mood || ''} 
+              onChange={handleSettingChange} 
+              className="glass-input" 
+              placeholder="e.g., I'm feeling like listening to upbeat Hungarian rap today, or avoid slow acoustic songs..."
+              rows={3}
+              style={{ resize: 'vertical' }}
+            />
+          </div>
         </div>
         
         <div style={{ marginTop: '2.5rem', display: 'flex', justifyContent: 'flex-end' }}>
