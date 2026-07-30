@@ -112,9 +112,9 @@ async function processQueue() {
 
     let pendingTracks = [];
     if (autoDownload) {
-      pendingTracks = await dbAll("SELECT * FROM history WHERE status IN ('recommended', 'queued') ORDER BY id ASC LIMIT 1");
+      pendingTracks = await dbAll("SELECT * FROM history WHERE status IN ('recommended', 'queued') AND hidden = 0 ORDER BY id ASC LIMIT 1");
     } else {
-      pendingTracks = await dbAll("SELECT * FROM history WHERE status = 'queued' ORDER BY id ASC LIMIT 1");
+      pendingTracks = await dbAll("SELECT * FROM history WHERE status = 'queued' AND hidden = 0 ORDER BY id ASC LIMIT 1");
     }
 
     if (pendingTracks.length > 0) {
