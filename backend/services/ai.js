@@ -3,6 +3,7 @@ const { getSetting, dbAll } = require('../database');
 const { getAllRecentListens } = require('./navidrome');
 
 async function searchMusicDatabase(term, provider = 'itunes') {
+  const country = await getSetting('itunes_country', 'HU');
   try {
     if (provider === 'deezer') {
       const url = `https://api.deezer.com/search?q=${encodeURIComponent(term)}&limit=10`;
@@ -15,7 +16,7 @@ async function searchMusicDatabase(term, provider = 'itunes') {
       }));
     } else {
       // Default to iTunes
-      const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=song&limit=10`;
+      const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=song&limit=10&country=${country}`;
       const response = await axios.get(url, { timeout: 10000 });
       const results = response.data.results || [];
       return results.map(r => ({
@@ -66,9 +67,10 @@ async function getTrendingMusic(genreId = 0, limit = 15, country = null) {
  * Fetch detailed metadata about a specific track.
  */
 async function getTrackInfo(artist, title) {
+  const country = await getSetting('itunes_country', 'HU');
   try {
     const term = `${artist} ${title}`;
-    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=song&limit=1`;
+    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=song&limit=1&country=${country}`;
     const response = await axios.get(url, { timeout: 10000 });
     const results = response.data.results || [];
     if (results.length > 0) {
@@ -162,10 +164,11 @@ async function getGenreSummary(tracks) {
   // Take up to 20 tracks to avoid hitting rate limits hard
   const sample = tracks.slice(0, 20);
   
+  const country = await getSetting('itunes_country', 'HU');
   for (const track of sample) {
     try {
       const term = encodeURIComponent(`${track.artist} ${track.title}`);
-      const response = await axios.get(`https://itunes.apple.com/search?term=${term}&entity=song&limit=1`, { timeout: 3000 });
+      const response = await axios.get(`https://itunes.apple.com/search?term=${term}&entity=song&limit=1&country=${country}`, { timeout: 3000 });
       if (response.data && response.data.results && response.data.results.length > 0) {
         const genre = response.data.results[0].primaryGenreName;
         if (genre) {
@@ -386,7 +389,8 @@ USER MOOD / CUSTOM INSTRUCTIONS: ${userMood}
         res.slice(0, 10).forEach(t => addCandidate(t, 'source_search'));
       } else if (cmd.action === 'search_artist_tracks' && cmd.artist) {
         console.log(`Executing search_artist_tracks for: ${cmd.artist}`);
-        const url = `https://itunes.apple.com/search?term=${encodeURIComponent(cmd.artist)}&entity=song&attribute=allArtistTerm&limit=50`;
+        const country = await getSetting('itunes_country', 'HU');
+        const url = `https://itunes.apple.com/search?term=${encodeURIComponent(cmd.artist)}&entity=song&attribute=allArtistTerm&limit=50&country=${country}`;
         const response = await axios.get(url, { timeout: 10000 });
         const results = response.data.results || [];
         const mapped = results.map(r => ({
@@ -457,7 +461,7 @@ Format:
   { "title": "Track Name", "artist": "Artist Name", "mood_match": 8, "profile_match": 9 }
 ]`;
 
-  const candidateString = candidates.map(c => `- ${c.artist} - ${c.title}`).join('\n');
+  const candidateString = candidates.map(c => `- ${c.artist} - ${c.title} (Genre: ${c.genre})`).join('\n');
 
   const generationUserPrompt = `
 USER PROFILE / HISTORY:
@@ -468,8 +472,9 @@ ${researchContext}
 CANDIDATES TO RATE:
 ${candidateString}
 
-Rate ALL candidates above.
-CRITICAL: You must strictly output the JSON array. Do not invent tracks. Only rate the ones listed.`;
+Rate ALL candidates above. 
+CRITICAL: You must strictly output the JSON array. Do not invent tracks. Only rate the ones listed.
+IMPORTANT VERIFICATION: Check the "Genre" of each candidate track! If the artist name matches the user's favorite artist, but the genre is completely different (e.g. user likes Hungarian Rap, but candidate is Lo-Fi or Indian Classical), this means it is a DIFFERENT artist with the same name. Score it 0!`;
 
   const tempSetting = await getSetting('llm_temperature', '0.2');
   const tempPhase3 = parseFloat(tempSetting) || 0.2;

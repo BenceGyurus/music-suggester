@@ -54,7 +54,8 @@ async function runRecommendationJob() {
           let imageUrl = '';
           try {
             const axios = require('axios');
-            const url = `https://itunes.apple.com/search?term=${encodeURIComponent(artist + ' ' + title)}&entity=song&limit=1`;
+            const country = await getSetting('itunes_country', 'HU');
+            const url = `https://itunes.apple.com/search?term=${encodeURIComponent(artist + ' ' + title)}&entity=song&limit=1&country=${country}`;
             const res = await axios.get(url, { timeout: 5000 });
             if (res.data && res.data.results && res.data.results.length > 0) {
               // Replace 100x100 with 600x600 for better quality
