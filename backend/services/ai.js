@@ -476,7 +476,7 @@ CRITICAL: You must strictly output the JSON array. Do not invent tracks. Only ra
 
   // Calculate final scores
   for (const track of candidates) {
-    let sum = weights['bias'] || -3.0; // Default bias if missing
+    let sum = weights['bias'] || 0.0; // Default neutral bias
     
     // Dynamically inject deep profile features
     const isFavorite = (stats.starred || []).some(fav => fav.artist.toLowerCase() === track.artist.toLowerCase());

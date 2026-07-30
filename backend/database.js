@@ -72,11 +72,14 @@ function initDb() {
       ('source_top_artist', 1.2),
       ('llm_mood_match', 2.0),
       ('llm_profile_match', 1.5),
-      ('bias', -3.0)
+      ('bias', 0.0)
     `);
 
     // Migration for v2.1.0: Divide legacy large weights by 10
     db.run(`UPDATE weights SET weight = weight / 10.0 WHERE weight > 3.0 OR weight < -3.0`);
+    
+    // Quick migration to reset bias to neutral based on user feedback
+    db.run(`UPDATE weights SET weight = 0.0 WHERE feature = 'bias'`);
 
     // Recommendation Features
     db.run(`CREATE TABLE IF NOT EXISTS recommendation_features (

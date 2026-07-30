@@ -135,7 +135,7 @@ app.post('/api/dislike', async (req, res) => {
         const features = await dbAll('SELECT feature, value FROM recommendation_features WHERE history_id = ?', [id]);
         
         // 1. Reconstruct Sum
-        let sum = weights['bias'] || -3.0;
+        let sum = weights['bias'] || 0.0;
         for (const f of features) {
           sum += (weights[f.feature] || 0) * f.value;
         }
